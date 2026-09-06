@@ -102,6 +102,9 @@ export const GymTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, nav
                   styles.tabLabel,
                   { color: isFocused ? colors.textInverse : colors.textMuted },
                 ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
               >
                 {label}
               </Text>
@@ -140,8 +143,8 @@ export const GymTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, nav
 const styles = StyleSheet.create({
   outerContainer: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: 12,
+    right: 12,
     alignItems: 'center',
   },
   bannerContainer: {
@@ -184,8 +187,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: '#000',
@@ -199,12 +202,11 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
-    maxWidth: 72,
-    minHeight: 52,
+    minHeight: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 2,
     borderRadius: borderRadius.lg,
   },
   tabButtonActive: {
@@ -226,10 +228,11 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
   },
   tabLabel: {
-    fontSize: 11.5,
+    fontSize: 10.5,
     fontWeight: '600',
-    marginTop: 3,
-    letterSpacing: 0.2,
+    marginTop: 2,
+    textAlign: 'center',
+    letterSpacing: 0.1,
   },
   centerActionButton: {
     top: -16, // Elevated slightly above the bar's baseline
