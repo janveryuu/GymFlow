@@ -1,0 +1,73 @@
+# =============================================================================
+# GymFlow Monorepo .gitignore
+# =============================================================================
+
+# Dependencies
+node_modules/
+backend/vendor/
+vendor/
+.pnp
+.pnp.js
+
+# Testing and Coverage
+coverage/
+.phpunit.result.cache
+*.lcov
+
+# Native Android Build Artifacts & Caches
+.gradle/
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/.idea/
+**/android/.kotlin/
+**/android/local.properties
+**/android/**/build/
+
+# Native iOS Build Artifacts & Caches
+**/ios/Pods/
+**/ios/build/
+**/ios/*.xcworkspace/xcuserdata/
+**/ios/*.xcodeproj/xcuserdata/
+
+# Expo, Metro, & Production Bundles
+.expo/
+dist/
+web-build/
+*.apk
+*.aab
+*.ipa
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Environment Secrets
+.env
+.env.local
+.env.*.local
+backend/.env
+!*.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Agent Scratch & Cache
+.agents/
+scratch/
