@@ -429,7 +429,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
           w.id.startsWith('ai-') ||
           w.slug.includes('ai')
       );
-      return personalized.length > 0 ? personalized : mergedList.slice(0, 3);
+      return personalized;
     }
     // 'custom' tab: display user's custom routines
     return customWorkouts;
@@ -451,19 +451,6 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
         accessibilityRole="button"
         accessibilityLabel={`Workout: ${item.title}`}
       >
-        {/* Rounded Checkbox */}
-        <TouchableOpacity
-          style={[
-            styles.checkbox,
-            isSelected && styles.checkboxChecked,
-          ]}
-          onPress={() => handleToggleSelectWorkout(item.id)}
-          activeOpacity={0.8}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          {isSelected && <Check size={14} color="#0A0A0A" strokeWidth={3} />}
-        </TouchableOpacity>
-
         {/* Dumbbell Icon Squircle */}
         <View style={styles.iconSquircle}>
           <Dumbbell size={22} color="#FFFFFF" />
@@ -681,7 +668,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
                 activeOpacity={0.85}
               >
                 <SquarePen
-                  size={15}
+                  size={18}
                   color={activeTab === 'custom' ? '#FFFFFF' : '#6B6B6B'}
                   style={styles.tabIcon}
                 />
@@ -704,7 +691,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
                 activeOpacity={0.85}
               >
                 <Sparkles
-                  size={15}
+                  size={18}
                   color={activeTab === 'personalized' ? '#FFFFFF' : '#6B6B6B'}
                   style={styles.tabIcon}
                 />
@@ -731,25 +718,27 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
               <WorkoutCardSkeleton />
             </View>
           ) : (
-            <EmptyState
-              icon={Dumbbell}
-              title={
-                activeTab === 'personalized'
-                  ? 'No Personalized Workouts Yet'
-                  : 'No Custom Workouts'
-              }
-              description={
-                activeTab === 'personalized'
-                  ? 'Tap "Generate" above to let AI craft an optimal hypertrophy routine for your body measurements.'
-                  : 'You have no custom workout routines created yet.'
-              }
-              actionLabel={
-                activeTab === 'personalized' ? 'Generate AI Routine' : undefined
-              }
-              onAction={
-                activeTab === 'personalized' ? handleGenerateAiWorkout : undefined
-              }
-            />
+            <View style={styles.emptyContainer}>
+              <EmptyState
+                icon={Dumbbell}
+                title={
+                  activeTab === 'personalized'
+                    ? 'No Personalized Workouts Yet'
+                    : 'No Custom Workouts'
+                }
+                description={
+                  activeTab === 'personalized'
+                    ? 'Tap "Generate" above to let AI craft an optimal hypertrophy routine for your body measurements.'
+                    : 'You have no custom workout routines created yet.'
+                }
+                actionLabel={
+                  activeTab === 'personalized' ? 'Generate AI Routine' : undefined
+                }
+                onAction={
+                  activeTab === 'personalized' ? handleGenerateAiWorkout : undefined
+                }
+              />
+            </View>
           )
         }
       />
@@ -1226,16 +1215,20 @@ const styles = StyleSheet.create({
   tabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 18,
   },
   tabButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: 12,
+    borderWidth: 1.2,
     borderColor: '#EAEAED',
     backgroundColor: '#F7F7F8',
   },
@@ -1247,8 +1240,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   tabButtonText: {
-    fontSize: 14,
-    fontFamily: typography.fonts.headingMedium,
+    fontSize: 15,
+    fontFamily: typography.fonts.headingSemiBold,
     color: '#6B6B6B',
     fontWeight: '600',
   },
@@ -1319,6 +1312,12 @@ const styles = StyleSheet.create({
 
   skeletonWrap: {
     paddingTop: 8,
+  },
+  emptyContainer: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
   },
 
   /* MODAL STYLES */

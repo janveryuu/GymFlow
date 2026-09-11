@@ -15,11 +15,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Lock, Mail, AlertCircle } from 'lucide-react-native';
+import { Lock, Mail, AlertCircle, Zap } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { colors, typography, borderRadius, spacing } from '../../theme';
 import { apiClient, setAuthToken } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
+import { useDevMockStore } from '../../store/devMockStore';
 import { GymFlowLogo, GymFlowWordmark } from '../../components/GymFlowBrand';
 
 const GoogleIcon: React.FC<{ size?: number }> = ({ size = 22 }) => (
@@ -118,13 +119,79 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       setAuthToken(token);
 
       // Transition immediately to the multi-step Profile Setup onboarding flow
-      navigation.navigate('ProfileSetup', { token, user, isGoogleAuth: true });
+      navigation.navigate('ProfileSetup', { token, user, isGoogleAuth: true, autofill: true });
     } catch (err: any) {
       if (err?.response?.data?.message) {
         setErrorMessage(err.response.data.message);
       } else {
         setErrorMessage('Unable to connect to database. Please check your network connection.');
       }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDevBypass = async () => {
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      // 1. Attempt quick authentication with seeded member credentials
+      const response = await apiClient.post(
+        '/api/v1/auth/login',
+        {
+          email: 'jane.doe@gymflow.test',
+          password: 'Password123!',
+        },
+        { timeout: 2500 }
+      );
+
+      const { token, user } = response.data;
+      setAuthToken(token);
+      navigation.navigate('ProfileSetup', { token, user, isGoogleAuth: true, autofill: true });
+    } catch {
+      // 2. Offline / Mock fallback: proceed to ProfileSetup with member profile autofilled
+      useDevMockStore.getState().setMockEnabled(true);
+      const fallbackUser = {
+        id: 1,
+        name: 'Jane Doe',
+        email: 'jane.doe@gymflow.test',
+        role: 'member' as const,
+        must_change_password: false,
+      };
+      setAuthToken('dev-offline-token-gymflow');
+      navigation.navigate('ProfileSetup', { token: 'dev-offline-token-gymflow', user: fallbackUser, isGoogleAuth: true, autofill: true });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDevDirectHome = async () => {
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const response = await apiClient.post(
+        '/api/v1/auth/login',
+        {
+          email: 'jane.doe@gymflow.test',
+          password: 'Password123!',
+        },
+        { timeout: 2500 }
+      );
+
+      const { token, user } = response.data;
+      await setAuth(token, user, false);
+    } catch {
+      useDevMockStore.getState().setMockEnabled(true);
+      const fallbackUser = {
+        id: 1,
+        name: 'Jane Doe',
+        email: 'jane.doe@gymflow.test',
+        role: 'member' as const,
+        must_change_password: false,
+      };
+      await setAuth('dev-offline-token-gymflow', fallbackUser, false);
     } finally {
       setIsSubmitting(false);
     }
@@ -139,6 +206,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           resizeMode="cover"
         />
         <SafeAreaView style={{ flex: 1, padding: spacing.xl, paddingBottom: spacing.xxl }}>
+          {/* Top Dev Mode Quick Pill */}
+          <View style={styles.topDevRow}>
+            <TouchableOpacity
+              onPress={handleDevDirectHome}
+              disabled={isSubmitting}
+              style={styles.topDevBadge}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Dev Mode quick bypass to home"
+            >
+              <Zap size={12} color="#CCFF00" style={{ marginRight: 5 }} />
+              <Text style={styles.topDevBadgeText}>SKIP TO HOME</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Spacer to showcase the central GymFlow graphic embedded in the artwork */}
           <View style={{ flex: 1 }} />
 
@@ -178,6 +260,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             >
               <Text style={styles.emailOptionText}>Or sign in with email</Text>
             </TouchableOpacity>
+
+            {/* Dev Mode Autofill Bypass Button */}
+            <TouchableOpacity
+              onPress={handleDevBypass}
+              disabled={isSubmitting}
+              style={styles.devBypassButton}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Dev Mode: Autofill Profile Setup"
+            >
+              <Zap size={14} color="#CCFF00" style={{ marginRight: 6 }} />
+              <Text style={styles.devBypassButtonText}>Dev Mode: Autofill Profile Setup</Text>
+            </TouchableOpacity>
           </View>
         </SafeAreaView>
       </View>
@@ -191,9 +286,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         style={styles.keyboardView}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity onPress={() => setShowEmailForm(false)} style={{ marginBottom: spacing.xl }}>
-            <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>← Back</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl }}>
+            <TouchableOpacity onPress={() => setShowEmailForm(false)}>
+              <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>← Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDevBypass}
+              disabled={isSubmitting}
+              style={styles.formDevBadge}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Dev Mode quick bypass"
+            >
+              <Zap size={11} color={colors.text} style={{ marginRight: 4 }} />
+              <Text style={styles.formDevBadgeText}>DEV SKIP</Text>
+            </TouchableOpacity>
+          </View>
           {/* Brand Header */}
           <View style={styles.brandContainer}>
             <View style={styles.brandIconWrapper}>
@@ -377,7 +485,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fieldWrapper: {
-    marginBottom: spacing.md,
+    marginBottom: 10,
   },
   label: {
     fontSize: typography.sizes.xs,
@@ -472,5 +580,60 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.65)',
     fontSize: typography.sizes.sm,
     fontWeight: '500',
+  },
+  topDevRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    width: '100%',
+  },
+  topDevBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(20, 20, 20, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.5)',
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  topDevBadgeText: {
+    color: '#CCFF00',
+    fontSize: 11,
+    fontFamily: typography.fonts.headingBold,
+    letterSpacing: 0.8,
+  },
+  devBypassButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    borderRadius: borderRadius.md,
+    minHeight: 48,
+    marginTop: spacing.xs,
+    width: '100%',
+  },
+  devBypassButtonText: {
+    color: '#F5F5F5',
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.headingSemiBold,
+    letterSpacing: 0.3,
+  },
+  formDevBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  formDevBadgeText: {
+    color: colors.text,
+    fontSize: 10,
+    fontFamily: typography.fonts.headingBold,
+    letterSpacing: 0.6,
   },
 });

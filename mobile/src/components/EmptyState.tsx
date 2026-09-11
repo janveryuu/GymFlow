@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, AccessibilityProps } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, AccessibilityProps, StyleProp, ViewStyle } from 'react-native';
 import { LucideIcon } from 'lucide-react-native';
 import { colors, typography, borderRadius, spacing } from '../theme';
 
@@ -9,6 +9,7 @@ interface EmptyStateProps extends AccessibilityProps {
   description: string;
   actionLabel?: string;
   onAction?: () => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
@@ -17,13 +18,16 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   description,
   actionLabel,
   onAction,
+  style,
   ...accessibilityProps
 }) => {
   return (
-    <View style={styles.container} {...accessibilityProps}>
+    <View style={[styles.container, style]} {...accessibilityProps}>
       {Icon && (
-        <View style={styles.iconContainer}>
-          <Icon size={32} color={colors.textSecondary} strokeWidth={1.5} />
+        <View style={styles.iconWrapper}>
+          <View style={styles.iconContainer}>
+            <Icon size={32} color={colors.textSecondary} strokeWidth={1.5} />
+          </View>
         </View>
       )}
       <Text style={styles.title}>{title}</Text>
@@ -45,10 +49,18 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 
 const styles = StyleSheet.create({
   container: {
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
     paddingVertical: 48,
     paddingHorizontal: 24,
+  },
+  iconWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   iconContainer: {
     width: 64,
@@ -57,23 +69,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    alignSelf: 'center',
     borderWidth: 1,
     borderColor: colors.border,
   },
   title: {
+    width: '100%',
     fontFamily: typography.fonts.headingBold,
     fontSize: typography.sizes.lg,
     color: colors.text,
     textAlign: 'center',
+    alignSelf: 'center',
     marginBottom: spacing.xs,
   },
   description: {
+    width: '100%',
+    maxWidth: 280,
     fontSize: typography.sizes.sm,
     color: colors.textMuted,
     textAlign: 'center',
+    alignSelf: 'center',
     lineHeight: typography.lineHeights.sm,
-    maxWidth: 280,
   },
   actionButton: {
     marginTop: spacing.md,
@@ -85,6 +101,7 @@ const styles = StyleSheet.create({
     minWidth: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
     borderWidth: 1,
     borderColor: colors.borderHighlight,
   },
@@ -92,5 +109,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.sizes.sm,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });
+

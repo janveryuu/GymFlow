@@ -1003,11 +1003,6 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
               <ChevronLeft size={22} color={colors.text} strokeWidth={2.5} />
             </TouchableOpacity>
 
-            <View style={styles.aiPillHeader}>
-              <Sparkles size={14} color="#0A0A0A" />
-              <Text style={styles.aiPillHeaderText}>AI GENERATOR</Text>
-            </View>
-
             <Text style={styles.stepCounterText}>Step {currentStep} of 2</Text>
           </View>
 
@@ -1073,25 +1068,21 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
                 {
                   id: '1-2' as FrequencyOption,
                   title: '1–2 Days / week',
-                  tag: 'Full Body',
                   desc: 'Full-body training each session. Maximum stimulus with minimal time investment.',
                 },
                 {
                   id: '3-4' as FrequencyOption,
                   title: '3–4 Days / week',
-                  tag: 'Push/Pull/Legs',
                   desc: 'The gold standard PPL split for muscle hypertrophy and progressive overload.',
                 },
                 {
                   id: '5-6' as FrequencyOption,
                   title: '5–6 Days / week',
-                  tag: 'PPL ×2',
                   desc: 'Double rotation push-pull-legs for maximum weekly volume and frequency.',
                 },
                 {
                   id: '7' as FrequencyOption,
                   title: 'Everyday (7 Days)',
-                  tag: 'Body Part Split',
                   desc: 'Dedicated body part split with active recovery. Full dedication protocol.',
                 },
               ].map((item) => {
@@ -1115,11 +1106,6 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
                         <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
                           {item.title}
                         </Text>
-                        <View style={[styles.badgePill, isSelected && styles.badgePillActive]}>
-                          <Text style={[styles.badgePillText, isSelected && styles.badgePillTextActive]}>
-                            {item.tag}
-                          </Text>
-                        </View>
                       </View>
                       <Text style={styles.optionDescText}>{item.desc}</Text>
                     </View>
@@ -1260,29 +1246,6 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
             contentContainerStyle={styles.agenticScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* Pulsing AI Core */}
-            <View style={styles.coreWrapper}>
-              <Animated.View
-                style={[
-                  styles.coreAuraOuter,
-                  {
-                    transform: [{ scale: pulseAnim }],
-                  },
-                ]}
-              />
-              <Animated.View
-                style={[
-                  styles.coreAuraMiddle,
-                  {
-                    transform: [{ scale: Animated.multiply(pulseAnim, 0.85) }],
-                  },
-                ]}
-              />
-              <View style={styles.coreOrb}>
-                <Bot size={34} color="#0A0A0A" />
-              </View>
-            </View>
-
             <View style={styles.agenticHeading}>
               <Text style={styles.agenticTitle}>Synthesizing AI Protocol</Text>
               <Text style={styles.agenticSubtitle}>
@@ -1471,20 +1434,6 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
                 <View style={styles.dayDetailWrap}>
                   <View style={styles.dayDetailHeader}>
                     <Text style={styles.dayDetailTitle}>{activeDay.title}</Text>
-                    <View style={styles.dayDetailMetrics}>
-                      <View style={styles.dayMetricPill}>
-                        <Clock size={12} color="#0A0A0A" />
-                        <Text style={styles.dayMetricText}>{activeDay.durationMinutes} min</Text>
-                      </View>
-                      <View style={styles.dayMetricPill}>
-                        <Flame size={12} color="#0A0A0A" />
-                        <Text style={styles.dayMetricText}>~{activeDay.calories} kcal</Text>
-                      </View>
-                      <View style={styles.dayMetricPill}>
-                        <Dumbbell size={12} color="#0A0A0A" />
-                        <Text style={styles.dayMetricText}>{activeDay.exercises.length} exercises</Text>
-                      </View>
-                    </View>
                   </View>
 
                   <View style={styles.exercisesListStack}>

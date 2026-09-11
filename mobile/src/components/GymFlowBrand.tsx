@@ -148,6 +148,7 @@ export const GymFlowWordmark: React.FC<GymFlowWordmarkProps> = ({
 
 export interface GymFlowBrandHeaderProps {
   layout?: 'row' | 'column';
+  showLogo?: boolean;
   logoSize?: number;
   textSize?: number;
   textColor?: string;
@@ -159,6 +160,7 @@ export interface GymFlowBrandHeaderProps {
 
 export const GymFlowBrandHeader: React.FC<GymFlowBrandHeaderProps> = ({
   layout = 'row',
+  showLogo = true,
   logoSize = 38,
   textSize = 28,
   textColor,
@@ -170,12 +172,12 @@ export const GymFlowBrandHeader: React.FC<GymFlowBrandHeaderProps> = ({
   if (layout === 'column') {
     return (
       <View style={[styles.columnContainer, style]} accessibilityLabel={accessibilityLabel}>
-        <GymFlowLogo size={logoSize} />
+        {showLogo && <GymFlowLogo size={logoSize} />}
         <GymFlowWordmark
           height={textSize}
           variant={variant}
           color={textColor}
-          style={{ marginTop: spacing.xs }}
+          style={showLogo ? { marginTop: spacing.xs } : undefined}
         />
         {subtitle ? (
           <Text
@@ -193,8 +195,8 @@ export const GymFlowBrandHeader: React.FC<GymFlowBrandHeaderProps> = ({
 
   return (
     <View style={[styles.rowContainer, style]} accessibilityLabel={accessibilityLabel}>
-      <GymFlowLogo size={logoSize} />
-      <View style={styles.rowTextContainer}>
+      {showLogo && <GymFlowLogo size={logoSize} />}
+      <View style={[styles.rowTextContainer, !showLogo && { marginLeft: 0 }]}>
         <GymFlowWordmark height={textSize} variant={variant} color={textColor} />
         {subtitle ? (
           <Text

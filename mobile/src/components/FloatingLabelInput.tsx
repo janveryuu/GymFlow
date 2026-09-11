@@ -194,7 +194,7 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
 
 const styles = StyleSheet.create({
   outerWrapper: {
-    marginBottom: 16,
+    marginBottom: 0,
     width: '100%',
   },
   inputContainer: {

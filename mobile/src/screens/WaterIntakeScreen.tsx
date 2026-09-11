@@ -34,6 +34,15 @@ interface DayHistory  { date_key: string; total_ml: number; }
 const CHART_WIDTH  = Dimensions.get('window').width - 80;
 const CHART_HEIGHT = 90;
 
+const WATER_COLORS = {
+  primary: '#0EA5E9',         // Vibrant water / ocean blue
+  primaryDark: '#0284C7',     // Deep ocean blue
+  surface: '#F0F9FF',         // Refreshing soft water card background
+  surfaceElevated: '#E0F2FE', // Lighter water tint
+  border: '#BAE6FD',          // Clean sky/water border
+  track: '#E0F2FE',           // Ring background track
+};
+
 export const WaterIntakeScreen: React.FC = () => {
   const navigation = useNavigation();
 
@@ -127,6 +136,7 @@ export const WaterIntakeScreen: React.FC = () => {
     return { key, label, total_ml: found?.total_ml ?? 0 };
   });
   const maxBarMl = Math.max(...chartDays.map(d => d.total_ml), dailyTarget, 1);
+
   const barGap   = CHART_WIDTH / 7;
   const barW     = barGap * 0.52;
 
@@ -141,13 +151,14 @@ export const WaterIntakeScreen: React.FC = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Progress Ring */}
+        {/* Progress Ring (Laid flat in background) */}
         <View style={styles.ringContainer}>
           <PercentRing
             percentage={percentage}
             size={200}
             strokeWidth={16}
-            color={colors.primary}
+            color={WATER_COLORS.primary}
+            trackColor={WATER_COLORS.track}
             label={`${currentIntake} / ${dailyTarget} ml`}
             showPercentageText
           />
@@ -159,19 +170,29 @@ export const WaterIntakeScreen: React.FC = () => {
           </Text>
         </View>
 
-        {/* Quick Add */}
+        {/* Quick Add (2x2 Grid) */}
         <Text style={styles.sectionTitle}>Quick Add</Text>
-        <View style={styles.quickRow}>
-          {([250, 500, 750] as const).map(ml => (
-            <TouchableOpacity key={ml} style={styles.quickBtn} onPress={() => logWater(ml)}>
-              <Droplets color={colors.textInverse} size={17} />
-              <Text style={styles.quickBtnText}>+{ml} ml</Text>
+        <View style={styles.quickGrid}>
+          <View style={styles.quickRow}>
+            <TouchableOpacity style={styles.quickBtn} onPress={() => logWater(250)} activeOpacity={0.85}>
+              <Droplets color={colors.textInverse} size={18} />
+              <Text style={styles.quickBtnText}>+250 ml</Text>
             </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={[styles.quickBtn, styles.quickBtnOutline]} onPress={() => setShowModal(true)}>
-            <Plus color={colors.text} size={17} />
-            <Text style={[styles.quickBtnText, { color: colors.text }]}>Custom</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.quickBtn} onPress={() => logWater(500)} activeOpacity={0.85}>
+              <Droplets color={colors.textInverse} size={18} />
+              <Text style={styles.quickBtnText}>+500 ml</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.quickRow}>
+            <TouchableOpacity style={styles.quickBtn} onPress={() => logWater(750)} activeOpacity={0.85}>
+              <Droplets color={colors.textInverse} size={18} />
+              <Text style={styles.quickBtnText}>+750 ml</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.quickBtn, styles.quickBtnOutline]} onPress={() => setShowModal(true)} activeOpacity={0.85}>
+              <Plus color={WATER_COLORS.primaryDark} size={18} />
+              <Text style={[styles.quickBtnText, { color: WATER_COLORS.primaryDark }]}>Custom</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 7-Day Bar Chart */}
@@ -185,10 +206,10 @@ export const WaterIntakeScreen: React.FC = () => {
               return (
                 <React.Fragment key={day.key}>
                   <Rect x={x} y={CHART_HEIGHT - barH} width={barW} height={barH} rx={4}
-                    fill={isToday ? colors.primary : 'rgba(10,10,10,0.18)'} />
+                    fill={isToday ? WATER_COLORS.primary : 'rgba(14, 165, 233, 0.22)'} />
                   <SvgText x={x + barW / 2} y={CHART_HEIGHT + 14} textAnchor="middle"
                     fontSize={10}
-                    fill={isToday ? colors.text : colors.textMuted}>
+                    fill={isToday ? WATER_COLORS.primaryDark : colors.textMuted}>
                     {day.label}
                   </SvgText>
                 </React.Fragment>
@@ -204,7 +225,7 @@ export const WaterIntakeScreen: React.FC = () => {
           <View style={styles.emptyCard}><Text style={styles.emptyText}>Loading…</Text></View>
         ) : todayEntries.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Droplets color={colors.textMuted} size={32} />
+            <Droplets color={WATER_COLORS.primary} size={32} />
             <Text style={styles.emptyText}>No water logged yet today.</Text>
             <Text style={styles.emptySubtext}>Use the quick-add buttons above to get started.</Text>
           </View>
@@ -212,7 +233,7 @@ export const WaterIntakeScreen: React.FC = () => {
           <View style={styles.logList}>
             {todayEntries.map(entry => (
               <View key={entry.id} style={styles.logRow}>
-                <Droplets color={colors.text} size={16} />
+                <Droplets color={WATER_COLORS.primary} size={16} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.logAmount}>{entry.amount_ml} ml</Text>
                   <Text style={styles.logTime}>
@@ -264,23 +285,24 @@ const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: colors.background },
   header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle:   { fontSize: typography.sizes.lg, fontFamily: typography.fonts.headingBold, color: colors.text },
-  content:       { padding: 24 },
-  ringContainer: { alignItems: 'center', marginBottom: 28 },
-  targetLabel:   { marginTop: 12, fontSize: typography.sizes.sm, fontWeight: '500', color: colors.textSecondary, textAlign: 'center' },
+  content:       { padding: 20 },
+  ringContainer: { alignItems: 'center', marginBottom: 28, marginTop: 4 },
+  targetLabel:   { marginTop: 14, fontSize: typography.sizes.sm, fontFamily: typography.fonts.headingBold, color: colors.text, textAlign: 'center' },
   formulaNote:   { fontSize: typography.sizes.xs, color: colors.textMuted, textAlign: 'center', marginTop: 4 },
-  sectionTitle:  { fontSize: typography.sizes.base, fontFamily: typography.fonts.headingBold, color: colors.text, marginBottom: 12, marginTop: 8 },
-  quickRow:      { flexDirection: 'row', gap: 10, marginBottom: 28, flexWrap: 'wrap' },
-  quickBtn:      { flex: 1, minWidth: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.text, paddingVertical: 12, paddingHorizontal: 10, borderRadius: borderRadius.lg, gap: 6 },
-  quickBtnOutline: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  quickBtnText:  { color: colors.textInverse, fontWeight: '600', fontSize: typography.sizes.sm },
-  chartCard:     { backgroundColor: colors.surface, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 28, alignItems: 'center' },
+  sectionTitle:  { fontSize: typography.sizes.base, fontFamily: typography.fonts.headingBold, color: colors.text, marginBottom: 12, marginTop: 6 },
+  quickGrid:     { gap: 10, marginBottom: 24 },
+  quickRow:      { flexDirection: 'row', gap: 10 },
+  quickBtn:      { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: WATER_COLORS.primary, paddingVertical: 14, paddingHorizontal: 12, borderRadius: borderRadius.lg, gap: 8 },
+  quickBtnOutline: { backgroundColor: WATER_COLORS.surface, borderWidth: 1.5, borderColor: WATER_COLORS.border },
+  quickBtnText:  { color: colors.textInverse, fontWeight: '700', fontSize: typography.sizes.sm },
+  chartCard:     { backgroundColor: WATER_COLORS.surface, borderRadius: borderRadius.lg, borderWidth: 1.5, borderColor: WATER_COLORS.border, padding: 16, marginBottom: 24, alignItems: 'center' },
   chartCaption:  { fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 8 },
-  emptyCard:     { backgroundColor: colors.surface, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, padding: 32, alignItems: 'center', gap: 8 },
+  emptyCard:     { backgroundColor: WATER_COLORS.surface, borderRadius: borderRadius.lg, borderWidth: 1.5, borderColor: WATER_COLORS.border, padding: 32, alignItems: 'center', gap: 8 },
   emptyText:     { fontSize: typography.sizes.sm, fontWeight: '500', color: colors.textSecondary, textAlign: 'center' },
   emptySubtext:  { fontSize: typography.sizes.xs, color: colors.textMuted, textAlign: 'center' },
-  logList:       { backgroundColor: colors.surface, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
-  logRow:        { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
-  logAmount:     { fontSize: typography.sizes.sm, fontWeight: '600', color: colors.text },
+  logList:       { backgroundColor: WATER_COLORS.surface, borderRadius: borderRadius.lg, borderWidth: 1.5, borderColor: WATER_COLORS.border, overflow: 'hidden' },
+  logRow:        { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: WATER_COLORS.border },
+  logAmount:     { fontSize: typography.sizes.sm, fontWeight: '700', color: colors.text },
   logTime:       { fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 2 },
   overlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalCard:     { backgroundColor: colors.surface, borderRadius: borderRadius.xl, padding: 24, width: '100%', maxWidth: 360 },
@@ -289,6 +311,6 @@ const styles = StyleSheet.create({
   modalRow:      { flexDirection: 'row', gap: 12 },
   cancelBtn:     { flex: 1, padding: 14, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   cancelText:    { fontSize: typography.sizes.sm, fontWeight: '500', color: colors.textSecondary },
-  addBtn:        { flex: 1, padding: 14, borderRadius: borderRadius.md, backgroundColor: colors.primary, alignItems: 'center' },
+  addBtn:        { flex: 1, padding: 14, borderRadius: borderRadius.md, backgroundColor: WATER_COLORS.primary, alignItems: 'center' },
   addText:       { fontSize: typography.sizes.sm, fontWeight: '700', color: colors.textInverse },
 });

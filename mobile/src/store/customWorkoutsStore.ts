@@ -80,31 +80,7 @@ const DEFAULT_LEG_DAY_EXERCISES: CustomExerciseItem[] = [
   },
 ];
 
-const INITIAL_CUSTOM_ROUTINES: CustomRoutineWorkout[] = [
-  {
-    id: 'custom-leg-day-power',
-    title: 'Leg Day Power',
-    slug: 'leg-day-power',
-    category: 'Custom',
-    duration_minutes: 45,
-    calories: 360,
-    difficulty: 'intermediate',
-    equipment: 'Barbell & Machines',
-    sets: 4,
-    reps: 12,
-    sets_reps: '4 exercises • Last: 11/24/2025',
-    image_url: '',
-    description: 'High-intensity quadriceps, hamstrings, and calves hypertrophy routine.',
-    completion_percentage: 0,
-    is_favorite: true,
-    source: 'local',
-    primaryMuscle: 'Legs',
-    secondaryMuscles: ['Quads', 'Hamstrings', 'Calves'],
-    exerciseType: 'strength',
-    isCustomRoutine: true,
-    routineExercises: DEFAULT_LEG_DAY_EXERCISES,
-  },
-];
+const INITIAL_CUSTOM_ROUTINES: CustomRoutineWorkout[] = [];
 
 interface CustomWorkoutsState {
   customWorkouts: CustomRoutineWorkout[];

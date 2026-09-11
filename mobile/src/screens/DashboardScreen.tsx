@@ -21,7 +21,7 @@ import { WorkoutIllustration } from '../components/WorkoutIllustration';
 import { getSyncRepository } from '../sync/SyncRepository';
 import { mergeWorkouts, filterMergedCatalog } from '../sync/workoutMerge';
 import { useAuthStore } from '../store/authStore';
-import { GymFlowBrandHeader } from '../components/GymFlowBrand';
+import { GymFlowWordmark } from '../components/GymFlowBrand';
 import type { Session, ProgressHistoryResponse, MergedWorkout } from '../types';
 
 interface DashboardScreenProps {
@@ -229,7 +229,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) 
       >
         {/* Top Brand Bar */}
         <View style={styles.topBrandBar}>
-          <GymFlowBrandHeader logoSize={42} textSize={30} />
+          <GymFlowWordmark height={28} />
           <TouchableOpacity 
             style={styles.notificationButton}
             onPress={() => {

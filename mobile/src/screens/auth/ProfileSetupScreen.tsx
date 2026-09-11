@@ -13,7 +13,7 @@ import {
   Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react-native';
+import { ArrowRight, ArrowLeft, AlertCircle, Zap } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, borderRadius, spacing } from '../../theme';
 import { CalendarPicker } from '../../components/CalendarPicker';
@@ -27,6 +27,8 @@ interface ProfileSetupScreenProps {
     params?: {
       token?: string;
       user?: any;
+      isGoogleAuth?: boolean;
+      autofill?: boolean;
     };
   };
   navigation: any;
@@ -36,28 +38,51 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ route, n
   const incomingUser = route?.params?.user || { name: '', email: '' };
   const incomingToken = route?.params?.token || '';
   const setAuth = useAuthStore((state) => state.setAuth);
+  const isAutofill = Boolean(route?.params?.autofill);
 
   // Step state: 1 to 5 (1-4 are wizard steps, 5 is welcome screen)
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 5;
 
-  // Slide 1: Name & Contact (no auto-fill/placeholders as requested)
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
+  // Slide 1: Name & Contact
+  const [firstName, setFirstName] = useState(isAutofill ? (incomingUser.name?.split(' ')[0] || 'Jane') : '');
+  const [lastName, setLastName] = useState(isAutofill ? (incomingUser.name?.split(' ').slice(1).join(' ') || 'Doe') : '');
+  const [phone, setPhone] = useState(isAutofill ? '+1 (555) 234-5678' : '');
 
   // Slide 2: Gender Selection
-  const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>('');
+  const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>(isAutofill ? 'female' : '');
   const [genderError, setGenderError] = useState(false);
 
   // Slide 3: Birthdate
-  const [birthdate, setBirthdate] = useState<Date>(new Date(2000, 0, 15));
+  const [birthdate, setBirthdate] = useState<Date>(isAutofill ? new Date(1998, 4, 15) : new Date(2000, 0, 15));
 
-  // Slide 4: Weight & Height (clean, empty defaults)
-  const [weight, setWeight] = useState('');
+  // Slide 4: Weight & Height
+  const [weight, setWeight] = useState(isAutofill ? '65' : '');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
-  const [height, setHeight] = useState('');
+  const [height, setHeight] = useState(isAutofill ? '170' : '');
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
+
+  const autofillFields = () => {
+    setFirstName('Jane');
+    setLastName('Doe');
+    setPhone('+1 (555) 234-5678');
+    setGender('female');
+    setBirthdate(new Date(1998, 4, 15));
+    setWeight('65');
+    setHeight('170');
+    setFirstNameError(false);
+    setLastNameError(false);
+    setGenderError(false);
+    setWeightError(false);
+    setHeightError(false);
+    setGlobalError('');
+  };
+
+  useEffect(() => {
+    if (route?.params?.autofill) {
+      autofillFields();
+    }
+  }, [route?.params?.autofill]);
 
   // Slide 5 loading state
   const [isFinishing, setIsFinishing] = useState(false);
@@ -270,6 +295,16 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ route, n
               <Text style={styles.stepText}>
                 Step {currentStep} of 4
               </Text>
+
+              <TouchableOpacity
+                onPress={autofillFields}
+                style={styles.devAutofillPill}
+                activeOpacity={0.7}
+                accessibilityLabel="Autofill Dev Profile"
+              >
+                <Zap size={11} color={colors.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.devAutofillPillText}>Autofill</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Continuous Progress Bar Track */}
@@ -381,19 +416,16 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ route, n
                     {
                       id: 'male' as const,
                       title: 'Male',
-                      badge: 'Metabolic & Strength',
                       desc: 'Calibrates basal metabolic rate and strength progression benchmarks.',
                     },
                     {
                       id: 'female' as const,
                       title: 'Female',
-                      badge: 'Metabolic & Endurance',
                       desc: 'Calibrates energy expenditure and target heart rate zone benchmarks.',
                     },
                     {
                       id: 'other' as const,
                       title: 'Prefer not to say',
-                      badge: 'Standard Metrics',
                       desc: 'Applies balanced, non-gendered fitness algorithms.',
                     },
                   ].map((item) => {
@@ -413,17 +445,10 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ route, n
                         }}
                         activeOpacity={0.8}
                       >
-                        <View style={{ flex: 1 }}>
-                          <View style={styles.optionHeaderRow}>
-                            <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                              {item.title}
-                            </Text>
-                            <View style={[styles.badgePill, isSelected && styles.badgePillActive]}>
-                              <Text style={[styles.badgePillText, isSelected && styles.badgePillTextActive]}>
-                                {item.badge}
-                              </Text>
-                            </View>
-                          </View>
+                        <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                          <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
+                            {item.title}
+                          </Text>
                           <Text style={styles.optionDescText}>{item.desc}</Text>
                         </View>
 
@@ -706,6 +731,21 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  devAutofillPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  devAutofillPillText: {
+    color: colors.text,
+    fontSize: 11,
+    fontFamily: typography.fonts.headingBold,
+  },
   // Continuous Smooth Progress Bar
   progressBarTrack: {
     width: '100%',
@@ -734,7 +774,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   headerBlock: {
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.lg,
   },
   title: {
     fontSize: typography.sizes.xxl,
@@ -751,7 +791,7 @@ const styles = StyleSheet.create({
   },
   // Flat inputs laid directly on main background
   fieldsContainer: {
-    gap: spacing.xl,
+    gap: 12,
   },
   fieldItem: {
     marginBottom: spacing.xs,
@@ -873,37 +913,14 @@ const styles = StyleSheet.create({
   selectableCardError: {
     borderColor: colors.error,
   },
-  optionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
   optionTitleText: {
     fontSize: typography.sizes.base,
     fontFamily: typography.fonts.headingBold,
     color: colors.text,
-    marginRight: spacing.sm,
+    marginBottom: 4,
   },
   optionTitleTextActive: {
     color: colors.text,
-  },
-  badgePill: {
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.xs,
-  },
-  badgePillActive: {
-    backgroundColor: colors.primary,
-  },
-  badgePillText: {
-    fontSize: 10,
-    fontFamily: typography.fonts.headingSemiBold,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-  },
-  badgePillTextActive: {
-    color: colors.textInverse,
   },
   optionDescText: {
     fontSize: typography.sizes.xs,
