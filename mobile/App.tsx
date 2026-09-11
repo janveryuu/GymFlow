@@ -20,14 +20,23 @@ const queryClient = new QueryClient({
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    Archivo_400Regular: require('./assets/fonts/Archivo_400Regular.ttf'),
-    Archivo_500Medium: require('./assets/fonts/Archivo_500Medium.ttf'),
-    Archivo_600SemiBold: require('./assets/fonts/Archivo_600SemiBold.ttf'),
-    Archivo_700Bold: require('./assets/fonts/Archivo_700Bold.ttf'),
-    Archivo_800ExtraBold: require('./assets/fonts/Archivo_800ExtraBold.ttf'),
-    Archivo_900Black: require('./assets/fonts/Archivo_900Black.ttf'),
-    'Archivo-Bold': require('./assets/fonts/Archivo_700Bold.ttf'),
-    'Archivo-Black': require('./assets/fonts/Archivo_900Black.ttf'),
+    // SF Pro (San Francisco Pro - Hevy App typography)
+    'SF-Pro-Display-Regular': require('./assets/fonts/SF-Pro-Display-Regular.otf'),
+    'SF-Pro-Display-Medium': require('./assets/fonts/SF-Pro-Display-Medium.otf'),
+    'SF-Pro-Display-Semibold': require('./assets/fonts/SF-Pro-Display-Semibold.otf'),
+    'SF-Pro-Display-Bold': require('./assets/fonts/SF-Pro-Display-Bold.otf'),
+    'SF-Pro-Display-Black': require('./assets/fonts/SF-Pro-Display-Black.otf'),
+    'SF-Pro-Text-Regular': require('./assets/fonts/SF-Pro-Text-Regular.otf'),
+
+    // Aliases to ensure every existing component instantly renders in SF Pro
+    Archivo_400Regular: require('./assets/fonts/SF-Pro-Display-Regular.otf'),
+    Archivo_500Medium: require('./assets/fonts/SF-Pro-Display-Medium.otf'),
+    Archivo_600SemiBold: require('./assets/fonts/SF-Pro-Display-Semibold.otf'),
+    Archivo_700Bold: require('./assets/fonts/SF-Pro-Display-Bold.otf'),
+    Archivo_800ExtraBold: require('./assets/fonts/SF-Pro-Display-Black.otf'),
+    Archivo_900Black: require('./assets/fonts/SF-Pro-Display-Black.otf'),
+    'Archivo-Bold': require('./assets/fonts/SF-Pro-Display-Bold.otf'),
+    'Archivo-Black': require('./assets/fonts/SF-Pro-Display-Black.otf'),
   });
 
   useEffect(() => {

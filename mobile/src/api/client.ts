@@ -1,8 +1,15 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 import { useDevMockStore } from '../store/devMockStore';
 
-const BASE_URL = 'https://api.gymflow.app';
+/**
+ * Resolve the API base URL:
+ * 1. Use `extra.apiBaseUrl` from app.json / app.config.js if available
+ * 2. Fall back to the production placeholder (will be intercepted by MSW in dev)
+ */
+const BASE_URL =
+  Constants.expoConfig?.extra?.apiBaseUrl ?? 'https://api.gymflow.app';
 const AUTH_TOKEN_KEY = 'gymflow_auth_token';
 
 /**

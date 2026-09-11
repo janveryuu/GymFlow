@@ -12,6 +12,7 @@ import { GymFlowLogo, GymFlowWordmark } from '../components/GymFlowBrand';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { ForcedPasswordResetScreen } from '../screens/auth/ForcedPasswordResetScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
+import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
 
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { CatalogScreen } from '../screens/CatalogScreen';
@@ -24,6 +25,10 @@ import { BarcodeScannerScreen } from '../screens/BarcodeScannerScreen';
 import { AiFoodScannerScreen } from '../screens/AiFoodScannerScreen';
 import { WaterIntakeScreen } from '../screens/WaterIntakeScreen';
 import { AiCoachScreen } from '../screens/AiCoachScreen';
+import { WorkoutSelectScreen } from '../screens/WorkoutSelectScreen';
+import { CustomWorkoutDetailScreen } from '../screens/CustomWorkoutDetailScreen';
+import { WorkoutHistoryScreen } from '../screens/WorkoutHistoryScreen';
+import { AiWorkoutGenerateScreen } from '../screens/AiWorkoutGenerateScreen';
 
 import type { RootStackParamList, AuthStackParamList, MainTabParamList } from './types';
 
@@ -41,6 +46,7 @@ const AuthNavigator: React.FC = () => {
       }}
     >
       <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
       <AuthStack.Screen name="ForcedPasswordReset" component={ForcedPasswordResetScreen} />
       <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </AuthStack.Navigator>
@@ -109,6 +115,10 @@ export const RootNavigator: React.FC = () => {
             <Stack.Screen name="AiFoodScannerScreen" component={AiFoodScannerScreen} options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="WaterIntakeScreen" component={WaterIntakeScreen} options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="AiCoachScreen" component={AiCoachScreen} options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="WorkoutSelectScreen" component={WorkoutSelectScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="CustomWorkoutDetailScreen" component={CustomWorkoutDetailScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="WorkoutHistoryScreen" component={WorkoutHistoryScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="AiWorkoutGenerateScreen" component={AiWorkoutGenerateScreen} options={{ animation: 'slide_from_right' }} />
           </>
         )}
       </Stack.Navigator>

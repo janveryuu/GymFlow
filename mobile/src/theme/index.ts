@@ -37,18 +37,21 @@ export const colors = {
 
 export const typography = {
   fonts: {
-    headingBlack: 'Archivo_900Black',
-    headingBold: 'Archivo_700Bold',
-    headingSemiBold: 'Archivo_600SemiBold',
-    headingMedium: 'Archivo_500Medium',
-    headingRegular: 'Archivo_400Regular',
-    body: undefined,
+    headingBlack: 'SF-Pro-Display-Black',
+    headingBold: 'SF-Pro-Display-Bold',
+    headingSemiBold: 'SF-Pro-Display-Semibold',
+    headingMedium: 'SF-Pro-Display-Medium',
+    headingRegular: 'SF-Pro-Display-Regular',
+    body: 'SF-Pro-Text-Regular',
+    bodyBold: 'SF-Pro-Display-Bold',
+    bodySemiBold: 'SF-Pro-Display-Semibold',
+    bodyMedium: 'SF-Pro-Display-Medium',
   },
   fontFamily: {
-    headingBlack: 'Archivo_900Black',
-    headingBold: 'Archivo_700Bold',
-    heading: 'Archivo_700Bold',
-    body: undefined,
+    headingBlack: 'SF-Pro-Display-Black',
+    headingBold: 'SF-Pro-Display-Bold',
+    heading: 'SF-Pro-Display-Bold',
+    body: 'SF-Pro-Text-Regular',
   },
   sizes: {
     xs: 12,

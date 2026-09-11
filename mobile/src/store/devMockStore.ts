@@ -14,7 +14,7 @@ export interface DevMockState {
 }
 
 export const useDevMockStore = create<DevMockState>((set) => ({
-  isMockEnabled: true,
+  isMockEnabled: false, // Set to true to use MSW mock data instead of real backend
   latencyMode: 'realistic',
   forcedError: 'none',
 

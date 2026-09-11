@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { Home, Dumbbell, Calendar, TrendingUp, User as UserIcon, AlertCircle, Plus } from 'lucide-react-native';
+import { Home, Dumbbell, Calendar, TrendingUp, User as UserIcon, AlertCircle, Plus, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, borderRadius } from '../theme';
 import { useSyncStore } from '../store/syncStore';
@@ -122,10 +122,14 @@ export const GymTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, nav
                   accessibilityLabel="Action Hub"
                   style={styles.centerActionButton}
                   activeOpacity={0.8}
-                  onPress={() => setActionsSheetVisible(true)}
+                  onPress={() => setActionsSheetVisible((prev) => !prev)}
                 >
                   <View style={styles.centerActionIconWrapper}>
-                    <Plus color={colors.surface} size={28} />
+                    {actionsSheetVisible ? (
+                      <X color={colors.surface} size={22} strokeWidth={2.5} />
+                    ) : (
+                      <Plus color={colors.surface} size={28} />
+                    )}
                   </View>
                 </TouchableOpacity>
               </React.Fragment>

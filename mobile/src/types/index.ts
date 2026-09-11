@@ -4,6 +4,7 @@ export interface User {
   role: 'member';
   email?: string;
   must_change_password?: boolean;
+  gender?: string;
 }
 
 export interface LoginResponse {
@@ -31,6 +32,7 @@ export interface MemberProfile {
   email: string;
   phone: string;
   photo_url: string | null;
+  gender?: string;
   must_change_password: boolean;
   membership: Membership;
   created_at: string;

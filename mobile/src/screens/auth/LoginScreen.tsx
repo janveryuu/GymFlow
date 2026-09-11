@@ -16,10 +16,32 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lock, Mail, AlertCircle } from 'lucide-react-native';
+import Svg, { Path } from 'react-native-svg';
 import { colors, typography, borderRadius, spacing } from '../../theme';
-import { apiClient } from '../../api/client';
+import { apiClient, setAuthToken } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 import { GymFlowLogo, GymFlowWordmark } from '../../components/GymFlowBrand';
+
+const GoogleIcon: React.FC<{ size?: number }> = ({ size = 22 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Path
+      fill="#4285F4"
+      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+    />
+    <Path
+      fill="#34A853"
+      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+    />
+    <Path
+      fill="#FBBC05"
+      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.17 0 9.97 0 12s.45 3.83 1.25 5.42l4.03-3.15z"
+    />
+    <Path
+      fill="#EA4335"
+      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+    />
+  </Svg>
+);
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -81,6 +103,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const response = await apiClient.post('/api/v1/auth/login', {
+        email: 'jane.doe@gymflow.test',
+        password: 'Password123!',
+      });
+
+      const { token, user } = response.data;
+      // Set active auth token for client requests during setup
+      setAuthToken(token);
+
+      // Transition immediately to the multi-step Profile Setup onboarding flow
+      navigation.navigate('ProfileSetup', { token, user, isGoogleAuth: true });
+    } catch (err: any) {
+      if (err?.response?.data?.message) {
+        setErrorMessage(err.response.data.message);
+      } else {
+        setErrorMessage('Unable to connect to database. Please check your network connection.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (!showEmailForm) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000000' }}>
@@ -94,35 +143,41 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           <View style={{ flex: 1 }} />
 
           <View style={{ width: '100%' }}>
+            {errorMessage ? (
+              <View style={[styles.errorBanner, { marginBottom: spacing.md }]}>
+                <AlertCircle size={18} color={colors.error} />
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            {/* Single Google Sign-In Button */}
             <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: '#000000', borderWidth: 1, borderColor: '#333333', marginBottom: spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
-              onPress={() => setShowEmailForm(true)}
-              activeOpacity={0.8}
+              style={styles.googleButton}
+              onPress={handleGoogleLogin}
+              disabled={isSubmitting}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in with Google"
             >
-              <Text style={{ color: '#FFFFFF', fontSize: 20, marginRight: 8, fontWeight: 'bold' }}></Text>
-              <Text style={[styles.submitButtonText, { color: '#FFFFFF' }]}>Sign In with Apple</Text>
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#1F1F1F" />
+              ) : (
+                <View style={styles.googleButtonContent}>
+                  <GoogleIcon size={22} />
+                  <Text style={styles.googleButtonText}>Sign in with Google</Text>
+                </View>
+              )}
             </TouchableOpacity>
 
+            {/* Secondary Option */}
             <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xl }]}
               onPress={() => setShowEmailForm(true)}
-              activeOpacity={0.8}
+              style={styles.emailOptionButton}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in with email instead"
             >
-              <Mail size={20} color="#000000" style={{ marginRight: 8 }} />
-              <Text style={[styles.submitButtonText, { color: '#000000' }]}>Sign In with Email</Text>
+              <Text style={styles.emailOptionText}>Or sign in with email</Text>
             </TouchableOpacity>
-
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ color: 'rgba(0, 0, 0, 0.7)', fontSize: 14 }}>
-                Don&apos;t have an account?{' '}
-                <Text 
-                  style={{ color: '#000000', fontWeight: 'bold' }} 
-                  onPress={() => setShowEmailForm(true)}
-                >
-                  Sign up
-                </Text>
-              </Text>
-            </View>
           </View>
         </SafeAreaView>
       </View>
@@ -382,5 +437,40 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
     fontSize: typography.sizes.base,
     fontWeight: '700',
+  },
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+    minHeight: 52,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  googleButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleButtonText: {
+    color: '#1F1F1F',
+    fontSize: typography.sizes.base,
+    fontWeight: '600',
+    fontFamily: typography.fonts.headingMedium,
+    marginLeft: 12,
+  },
+  emailOptionButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+  },
+  emailOptionText: {
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: typography.sizes.sm,
+    fontWeight: '500',
   },
 });

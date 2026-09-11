@@ -5,64 +5,111 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  TextInput,
   RefreshControl,
+  Modal,
+  TextInput,
+  Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import {
-  Search,
-  X,
-  Clock,
-  Flame,
   Dumbbell,
-  Bookmark,
+  Sparkles,
+  SquarePen,
+  Trash2,
+  Check,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  History,
 } from 'lucide-react-native';
 import { colors, typography, borderRadius, spacing } from '../theme';
 import { WorkoutCardSkeleton } from '../components/SkeletonLoader';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorCard } from '../components/ErrorCard';
-import { PercentRing } from '../components/PercentRing';
-import { WorkoutIllustration } from '../components/WorkoutIllustration';
 import { getSyncRepository } from '../sync/SyncRepository';
-import { mergeWorkouts, filterMergedCatalog } from '../sync/workoutMerge';
+import { mergeWorkouts } from '../sync/workoutMerge';
 import { useRecentWorkoutsStore } from '../store/recentWorkoutsStore';
+import { useCustomWorkoutsStore, CustomRoutineWorkout } from '../store/customWorkoutsStore';
 import type { MergedWorkout, Workout } from '../types';
-
-const CATEGORIES = [
-  { id: 'all', label: 'All' },
-  { id: 'favorites', label: 'Saved' },
-  { id: 'chest', label: 'Chest' },
-  { id: 'back', label: 'Back' },
-  { id: 'leg', label: 'Legs' },
-  { id: 'arm', label: 'Arms' },
-  { id: 'full-body', label: 'Full-Body' },
-];
 
 interface CatalogScreenProps {
   navigation: any;
 }
 
 export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  // Height, Weight & BMI State
+  const [height, setHeight] = useState<number>(157);
+  const [weight, setWeight] = useState<number>(62);
+  const [isEditBmiModalVisible, setIsEditBmiModalVisible] = useState(false);
+  const [inputHeight, setInputHeight] = useState('157');
+  const [inputWeight, setInputWeight] = useState('62');
+
+  // Workouts data
   const [, setRawWorkouts] = useState<Workout[]>([]);
   const [mergedList, setMergedList] = useState<MergedWorkout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { recentIds, addRecentId } = useRecentWorkoutsStore();
+  // Tab filter: 'custom' or 'personalized'
+  const [activeTab, setActiveTab] = useState<'custom' | 'personalized'>('custom');
+
+  // Multi-select / edit mode state
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedWorkoutIds, setSelectedWorkoutIds] = useState<string[]>(['1']); // default preselect for preview like reference
+
+  // AI Generation indicator
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Choice & Custom Workout Creation Modals
+  const [isChoiceModalVisible, setIsChoiceModalVisible] = useState(false);
+  const [isCustomWorkoutModalVisible, setIsCustomWorkoutModalVisible] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customCategory, setCustomCategory] = useState('Chest');
+  const [customDuration, setCustomDuration] = useState('45');
+  const [customExercises, setCustomExercises] = useState('5');
+
+  const { addRecentId } = useRecentWorkoutsStore();
+  const { customWorkouts, addCustomWorkout, removeCustomWorkout } = useCustomWorkoutsStore();
   const repo = getSyncRepository();
 
+  // Load profile metrics & workouts
   const loadData = useCallback(async (forceRefresh = false) => {
     setError(null);
     try {
-      const data = await repo.getWorkouts({ forceRefresh });
-      setRawWorkouts(data);
-      const merged = mergeWorkouts(data);
+      const [workoutsData, profileData] = await Promise.all([
+        repo.getWorkouts({ forceRefresh }),
+        repo.getProfile().catch(() => null),
+      ]);
+      setRawWorkouts(workoutsData);
+      const merged = mergeWorkouts(workoutsData);
       setMergedList(merged);
+
+      // Preselect first workout if available for reference view
+      if (merged.length > 0 && merged[0]?.id && selectedWorkoutIds.length === 0) {
+        setSelectedWorkoutIds([merged[0].id]);
+      }
+
+      if (profileData) {
+        // If profile has height/weight stored
+        if ((profileData as any).height) {
+          const h = Number((profileData as any).height);
+          if (h > 0) {
+            setHeight(h);
+            setInputHeight(String(h));
+          }
+        }
+        if ((profileData as any).weight) {
+          const w = Number((profileData as any).weight);
+          if (w > 0) {
+            setWeight(w);
+            setInputWeight(String(w));
+          }
+        }
+      }
     } catch {
       setError('Unable to load full catalog from server. Displaying offline library.');
       const fallback = mergeWorkouts([]);
@@ -78,10 +125,30 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
       let active = true;
       (async () => {
         try {
-          const data = await repo.getWorkouts({ forceRefresh: false });
+          const [workoutsData, profileData] = await Promise.all([
+            repo.getWorkouts({ forceRefresh: false }),
+            repo.getProfile().catch(() => null),
+          ]);
           if (active) {
-            setRawWorkouts(data);
-            setMergedList(mergeWorkouts(data));
+            setRawWorkouts(workoutsData);
+            const merged = mergeWorkouts(workoutsData);
+            setMergedList(merged);
+            if (profileData) {
+              if ((profileData as any).height) {
+                const h = Number((profileData as any).height);
+                if (h > 0) {
+                  setHeight(h);
+                  setInputHeight(String(h));
+                }
+              }
+              if ((profileData as any).weight) {
+                const w = Number((profileData as any).weight);
+                if (w > 0) {
+                  setWeight(w);
+                  setInputWeight(String(w));
+                }
+              }
+            }
           }
         } catch {
           if (active) {
@@ -105,140 +172,311 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
     loadData(true);
   };
 
-  const handleToggleFavorite = async (workoutId: string) => {
+  // BMI Calculation
+  const bmiValue = useMemo(() => {
+    if (!height || !weight || height <= 0) return 25.2;
+    const heightInMeters = height / 100;
+    return parseFloat((weight / (heightInMeters * heightInMeters)).toFixed(1));
+  }, [height, weight]);
+
+  // BMI Category & Slider Position
+  const bmiCategory = useMemo(() => {
+    if (bmiValue < 18.5) return 'underweight';
+    if (bmiValue < 25.0) return 'normal';
+    if (bmiValue < 30.0) return 'overweight';
+    return 'obese';
+  }, [bmiValue]);
+
+  // Track position percentage (0% to 100%)
+  const bmiSliderPercent = useMemo(() => {
+    if (bmiValue < 18.5) {
+      // 14 to 18.5 maps to 4% - 25%
+      const val = Math.max(14, Math.min(18.5, bmiValue));
+      return ((val - 14) / (18.5 - 14)) * 23 + 2;
+    }
+    if (bmiValue < 25.0) {
+      // 18.5 to 25 maps to 25% - 50%
+      return 25 + ((bmiValue - 18.5) / (25 - 18.5)) * 25;
+    }
+    if (bmiValue < 30.0) {
+      // 25 to 30 maps to 50% - 75%
+      return 50 + ((bmiValue - 25) / (30 - 25)) * 25;
+    }
+    // 30 to 40 maps to 75% - 98%
+    const val = Math.min(40, bmiValue);
+    return 75 + ((val - 30) / (40 - 30)) * 23;
+  }, [bmiValue]);
+
+  // Save updated Height / Weight
+  const handleSaveMeasurements = () => {
+    const h = parseFloat(inputHeight);
+    const w = parseFloat(inputWeight);
+    if (!isNaN(h) && h > 50 && h < 260) {
+      setHeight(h);
+    }
+    if (!isNaN(w) && w > 20 && w < 300) {
+      setWeight(w);
+    }
+    setIsEditBmiModalVisible(false);
+  };
+
+  // Toggle single workout selection
+  const handleToggleSelectWorkout = (workoutId: string) => {
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.selectionAsync();
     } catch {
-      // Haptics unavailable in test/browser
+      // Haptics optional
+    }
+    setSelectedWorkoutIds((prev) =>
+      prev.includes(workoutId)
+        ? prev.filter((id) => id !== workoutId)
+        : [...prev, workoutId]
+    );
+  };
+
+  // Delete selected workouts
+  const handleDeleteSelected = () => {
+    if (selectedWorkoutIds.length === 0) return;
+
+    Alert.alert(
+      'Delete Workouts',
+      `Are you sure you want to remove ${selectedWorkoutIds.length} selected workout${selectedWorkoutIds.length > 1 ? 's' : ''}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            try {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch {
+              // Haptics optional
+            }
+            setMergedList((prev) =>
+              prev.filter((item) => !selectedWorkoutIds.includes(item.id))
+            );
+            selectedWorkoutIds.forEach((id) => removeCustomWorkout(id));
+            setSelectedWorkoutIds([]);
+            setIsSelectMode(false);
+          },
+        },
+      ]
+    );
+  };
+
+  // Custom Workout Creation Handler
+  const handleSaveCustomWorkout = () => {
+    if (!customTitle.trim()) {
+      Alert.alert('Required', 'Please enter a workout title.');
+      return;
     }
 
-    // Optimistic UI update
-    setMergedList((prev) =>
-      prev.map((w) =>
-        w.id === workoutId ? { ...w, is_favorite: !w.is_favorite } : w
-      )
-    );
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      // Haptics optional
+    }
 
-    await repo.toggleFavoriteWorkout(workoutId);
+    const durationNum = parseInt(customDuration, 10) || 45;
+    const exercisesNum = parseInt(customExercises, 10) || 4;
+
+    const newWorkout: CustomRoutineWorkout = {
+      id: `custom-${Date.now()}`,
+      title: customTitle.trim(),
+      slug: `custom-${Date.now()}`,
+      category: customCategory,
+      duration_minutes: durationNum,
+      calories: durationNum * 8,
+      difficulty: 'intermediate',
+      equipment: 'Free Weights',
+      sets: exercisesNum,
+      reps: 12,
+      sets_reps: `${exercisesNum} exercises • Last: ${new Date().toLocaleDateString('en-US')}`,
+      image_url: '',
+      description: `Custom ${customCategory} workout routine created by you.`,
+      completion_percentage: 0,
+      is_favorite: false,
+      source: 'local',
+      primaryMuscle: customCategory,
+      secondaryMuscles: [],
+      exerciseType: 'strength',
+      isCustomRoutine: true,
+      routineExercises: [
+        {
+          id: `ex-${Date.now()}-1`,
+          title: `${customCategory} Compound Press`,
+          slug: 'bench-press',
+          category: customCategory,
+          equipment: 'Barbell',
+          difficulty: 'INTERMEDIATE',
+          preferredSets: 4,
+          preferredReps: '8 - 10 reps',
+          restTimeSeconds: 90,
+          tips: 'Keep elbows tucked at 45 degrees, maintain back arch, and control the bar descent.',
+          duration_minutes: 15,
+          calories: 100,
+        },
+        {
+          id: `ex-${Date.now()}-2`,
+          title: `${customCategory} Isolation Extension`,
+          slug: 'dumbbell-curl',
+          category: customCategory,
+          equipment: 'Dumbbells',
+          difficulty: 'BEGINNER',
+          preferredSets: 3,
+          preferredReps: '12 - 15 reps',
+          restTimeSeconds: 45,
+          tips: 'Squeeze at the peak contraction for 1 second. Avoid swinging your body.',
+          duration_minutes: 10,
+          calories: 65,
+        },
+      ],
+    };
+
+    addCustomWorkout(newWorkout);
+    setIsCustomWorkoutModalVisible(false);
+    setCustomTitle('');
+    setActiveTab('custom');
+    addRecentId(newWorkout.id);
+
+    Alert.alert(
+      'Workout Created! 🏋️',
+      `"${newWorkout.title}" has been added to your custom workouts.`,
+      [
+        {
+          text: 'Open Routine',
+          onPress: () => navigation.navigate('CustomWorkoutDetailScreen', { routineId: newWorkout.id }),
+        },
+        { text: 'Done' },
+      ]
+    );
+  };
+
+  // AI Workout Generation Trigger
+  const handleGenerateAiWorkout = () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
+      // Haptics optional
+    }
+    setIsGenerating(true);
+    setTimeout(() => {
+      setIsGenerating(false);
+      // Auto switch to personalized tab and append generated workout
+      setActiveTab('personalized');
+      const newAiWorkout: MergedWorkout = {
+        id: `ai-gen-${Date.now()}`,
+        title: 'Full-Body AI Hypertrophy',
+        slug: 'full-body-ai',
+        category: 'Personalized',
+        duration_minutes: 42,
+        calories: 340,
+        difficulty: 'intermediate',
+        equipment: 'Dumbbells & Bench',
+        sets: 4,
+        reps: 12,
+        sets_reps: '4 sets x 12 reps',
+        image_url: '',
+        description: 'AI Generated hypertrophy routine',
+        completion_percentage: 0,
+        is_favorite: false,
+        source: 'local',
+        primaryMuscle: 'Full Body',
+        secondaryMuscles: ['Chest', 'Back', 'Legs'],
+        exerciseType: 'strength',
+      };
+      setMergedList((prev) => [newAiWorkout, ...prev]);
+      Alert.alert(
+        'Workout Generated! ✨',
+        'Your custom AI-personalized workout is ready in the Personalized tab.',
+        [
+          {
+            text: 'View Workout',
+            onPress: () => {
+              addRecentId(newAiWorkout.id);
+              navigation.navigate('WorkoutDetail', { workoutId: newAiWorkout.id });
+            },
+          },
+          { text: 'OK' },
+        ]
+      );
+    }, 1200);
   };
 
   const handleSelectWorkout = (workout: MergedWorkout) => {
-    addRecentId(workout.id);
-    navigation.navigate('WorkoutDetail', { workoutId: workout.id });
+    if (isSelectMode) {
+      handleToggleSelectWorkout(workout.id);
+    } else {
+      addRecentId(workout.id);
+      if (
+        (workout as any).isCustomRoutine ||
+        (workout as any).routineExercises?.length ||
+        workout.id.startsWith('custom-')
+      ) {
+        navigation.navigate('CustomWorkoutDetailScreen', { routineId: workout.id });
+      } else {
+        navigation.navigate('WorkoutDetail', { workoutId: workout.id });
+      }
+    }
   };
 
-  // Filtered workouts based on category and search query
-  const filteredWorkouts = useMemo(() => {
-    const isFavoritesTab = selectedCategory === 'favorites';
-    return filterMergedCatalog(mergedList, {
-      category: isFavoritesTab ? undefined : selectedCategory,
-      favoritesOnly: isFavoritesTab,
-      query: searchQuery,
-    });
-  }, [mergedList, selectedCategory, searchQuery]);
+  // Filtered workouts based on Active Tab
+  const displayWorkouts = useMemo(() => {
+    if (activeTab === 'personalized') {
+      const personalized = mergedList.filter(
+        (w) =>
+          w.category?.toLowerCase() === 'personalized' ||
+          w.id.startsWith('ai-') ||
+          w.slug.includes('ai')
+      );
+      return personalized.length > 0 ? personalized : mergedList.slice(0, 3);
+    }
+    // 'custom' tab: display user's custom routines
+    return customWorkouts;
+  }, [mergedList, customWorkouts, activeTab]);
 
-  // Recently viewed workouts
-  const recentWorkouts = useMemo(() => {
-    if (recentIds.length === 0 || searchQuery.trim().length > 0) return [];
-    const map = new Map(mergedList.map((w) => [w.id, w]));
-    return recentIds
-      .map((id) => map.get(id))
-      .filter((w): w is MergedWorkout => Boolean(w))
-      .slice(0, 6);
-  }, [recentIds, mergedList, searchQuery]);
-
+  // Render Workout Card matching reference layout
   const renderWorkoutCard = ({ item }: { item: MergedWorkout }) => {
-    const completionPct = item.completion_percentage ?? 0;
-    const isFav = Boolean(item.is_favorite);
+    const isSelected = selectedWorkoutIds.includes(item.id);
+    const exerciseCount = item.sets || 4;
 
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={[
+          styles.workoutCard,
+          isSelected && styles.workoutCardSelected,
+        ]}
         onPress={() => handleSelectWorkout(item)}
         activeOpacity={0.88}
         accessibilityRole="button"
-        accessibilityLabel={`Workout: ${item.title}, ${item.duration_minutes} minutes, ${item.difficulty}`}
+        accessibilityLabel={`Workout: ${item.title}`}
       >
-        {/* Contained Illustration Frame */}
-        <View style={styles.illustrationContainer}>
-          <WorkoutIllustration
-            slug={item.slug}
-            size={160}
-            containerStyle={styles.cardIllustration}
-          />
+        {/* Rounded Checkbox */}
+        <TouchableOpacity
+          style={[
+            styles.checkbox,
+            isSelected && styles.checkboxChecked,
+          ]}
+          onPress={() => handleToggleSelectWorkout(item.id)}
+          activeOpacity={0.8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          {isSelected && <Check size={14} color="#0A0A0A" strokeWidth={3} />}
+        </TouchableOpacity>
 
-          {/* Difficulty Badge */}
-          <View style={styles.difficultyBadge}>
-            <Text style={styles.difficultyText}>
-              {item.difficulty ? item.difficulty.toUpperCase() : 'INTERMEDIATE'}
-            </Text>
-          </View>
-
-          {/* Bookmark / Favorite Action */}
-          <TouchableOpacity
-            style={[styles.favoriteButton, isFav && styles.favoriteButtonActive]}
-            onPress={() => handleToggleFavorite(item.id)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityRole="button"
-            accessibilityLabel={isFav ? 'Remove from saved' : 'Save workout'}
-          >
-            <Bookmark
-              size={18}
-              color={isFav ? colors.textInverse : colors.text}
-              fill={isFav ? colors.textInverse : 'none'}
-            />
-          </TouchableOpacity>
-
-          {/* Completion Ring if logged */}
-          {completionPct > 0 && (
-            <View style={styles.badgeWrapper}>
-              <PercentRing
-                percentage={completionPct}
-                size={36}
-                strokeWidth={3}
-                color={colors.primary}
-                trackColor={colors.border}
-                textColor={colors.text}
-              />
-            </View>
-          )}
+        {/* Dumbbell Icon Squircle */}
+        <View style={styles.iconSquircle}>
+          <Dumbbell size={22} color="#FFFFFF" />
         </View>
 
-        {/* Content & Metadata */}
-        <View style={styles.cardContent}>
-          <View style={styles.categoryRow}>
-            <Text style={styles.cardCategory}>
-              {item.category ? item.category.toUpperCase() : 'GENERAL'}
-            </Text>
-            {item.equipment ? (
-              <Text style={styles.equipmentText} numberOfLines={1}>
-                • {item.equipment}
-              </Text>
-            ) : null}
-          </View>
-
-          <Text style={styles.cardTitle} numberOfLines={1}>
+        {/* Info Column */}
+        <View style={styles.workoutInfo}>
+          <Text style={styles.workoutTitle} numberOfLines={1}>
             {item.title}
           </Text>
-
-          <View style={styles.cardMetaRow}>
-            <View style={styles.metaItem}>
-              <Clock size={13} color={colors.textSecondary} />
-              <Text style={styles.metaText}>{item.duration_minutes}m</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Flame size={13} color={colors.textSecondary} />
-              <Text style={styles.metaText}>{item.calories} kcal</Text>
-            </View>
-            {item.sets_reps ? (
-              <View style={styles.metaItem}>
-                <Dumbbell size={13} color={colors.textSecondary} />
-                <Text style={styles.metaText} numberOfLines={1}>
-                  {item.sets_reps}
-                </Text>
-              </View>
-            ) : null}
-          </View>
+          <Text style={styles.workoutMeta} numberOfLines={1}>
+            {item.sets_reps || `${exerciseCount} exercises • Last: 11/24/2025`}
+          </Text>
         </View>
       </TouchableOpacity>
     );
@@ -246,153 +484,490 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Screen Header */}
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>Workout Catalog</Text>
-            <Text style={styles.subtitle}>
-              {mergedList.length > 0 ? `${mergedList.length} Exercises Available` : 'Offline Library'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Search size={18} color={colors.textMuted} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search 300+ exercises, muscles, equipment..."
-            placeholderTextColor={colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-            accessibilityLabel="Search exercises"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              style={styles.clearButton}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-            >
-              <X size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Horizontal Category Filter Pills */}
-      <View style={styles.pillsContainer}>
-        <FlatList
-          data={CATEGORIES}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(cat) => cat.id}
-          contentContainerStyle={styles.pillsContent}
-          renderItem={({ item }) => {
-            const isActive = selectedCategory === item.id;
-            return (
-              <TouchableOpacity
-                style={[styles.pill, isActive && styles.pillActive]}
-                onPress={() => setSelectedCategory(item.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Filter by ${item.label}`}
-                accessibilityState={isActive ? { selected: true } : {}}
-              >
-                <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
+      {/* Top Header */}
+      <View style={styles.topHeader}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('DashboardTab');
+            }
           }}
-        />
+          activeOpacity={0.7}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <ChevronLeft size={24} color="#0A0A0A" strokeWidth={2.5} />
+        </TouchableOpacity>
+
+        <Text style={styles.topHeaderTitle}>Workout</Text>
+
+        <TouchableOpacity
+          style={styles.historyHeaderButton}
+          onPress={() => navigation.navigate('WorkoutHistoryScreen')}
+          activeOpacity={0.75}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Workout History"
+        >
+          <History size={20} color="#0A0A0A" strokeWidth={2.2} />
+        </TouchableOpacity>
       </View>
 
-      {error ? <ErrorCard message={error} onRetry={() => loadData(true)} /> : null}
+      <FlatList
+        data={displayWorkouts}
+        keyExtractor={(item) => item.id}
+        renderItem={renderWorkoutCard}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+        ListHeaderComponent={
+          <View style={styles.headerComponent}>
+            {/* 1. TOP METRIC CARDS ROW (Height, Weight, BMI) */}
+            <View style={styles.metricRow}>
+              {/* Height Card */}
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>HEIGHT</Text>
+                <Text style={styles.metricValue}>{Math.round(height)}</Text>
+                <Text style={styles.metricUnit}>cm</Text>
+              </View>
 
-      {/* Main List */}
-      {isLoading ? (
-        <View style={styles.listPadding}>
-          <WorkoutCardSkeleton />
-          <WorkoutCardSkeleton />
-        </View>
-      ) : (
-        <FlatList
-          data={filteredWorkouts}
-          keyExtractor={(item) => item.id}
-          renderItem={renderWorkoutCard}
-          contentContainerStyle={styles.listPadding}
-          initialNumToRender={8}
-          maxToRenderPerBatch={10}
-          windowSize={5}
-          removeClippedSubviews={true}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
-          }
-          ListHeaderComponent={
-            recentWorkouts.length > 0 ? (
-              <View style={styles.recentSection}>
-                <Text style={styles.recentTitle}>Recently Viewed</Text>
-                <FlatList
-                  data={recentWorkouts}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  keyExtractor={(item) => `recent-${item.id}`}
-                  contentContainerStyle={styles.recentContent}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.recentCard}
-                      onPress={() => handleSelectWorkout(item)}
-                      activeOpacity={0.85}
-                    >
-                      <WorkoutIllustration
-                        slug={item.slug}
-                        size={80}
-                        containerStyle={styles.recentIllustration}
-                      />
-                      <Text style={styles.recentCardTitle} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.recentCardCategory}>
-                        {item.category?.toUpperCase() || 'GENERAL'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+              {/* Weight Card */}
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>WEIGHT</Text>
+                <Text style={styles.metricValue}>{Math.round(weight)}</Text>
+                <Text style={styles.metricUnit}>kg</Text>
+              </View>
+
+              {/* BMI Card */}
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => setIsEditBmiModalVisible(true)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.bmiHeaderRow}>
+                  <Text style={styles.metricLabel}>BMI</Text>
+                  <SquarePen size={14} color={colors.textSecondary} />
+                </View>
+                <Text style={styles.bmiValue}>{bmiValue.toFixed(1)}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 2. BMI SLIDER & CATEGORIES */}
+            <View style={styles.bmiSliderSection}>
+              {/* Continuous Track */}
+              <View style={styles.sliderTrack}>
+                <View
+                  style={[
+                    styles.sliderFilledTrack,
+                    { width: `${Math.min(100, Math.max(4, bmiSliderPercent))}%` },
+                  ]}
+                />
+                {/* Indicator Thumb */}
+                <View
+                  style={[
+                    styles.sliderThumb,
+                    { left: `${Math.min(96, Math.max(2, bmiSliderPercent))}%` },
+                  ]}
                 />
               </View>
-            ) : null
-          }
-          ListEmptyComponent={
+
+              {/* Category Labels */}
+              <View style={styles.sliderLabelsRow}>
+                <Text
+                  style={[
+                    styles.categoryLabel,
+                    bmiCategory === 'underweight' && styles.categoryLabelActive,
+                  ]}
+                >
+                  Underweight
+                </Text>
+                <Text
+                  style={[
+                    styles.categoryLabel,
+                    bmiCategory === 'normal' && styles.categoryLabelActive,
+                  ]}
+                >
+                  Normal
+                </Text>
+                <Text
+                  style={[
+                    styles.categoryLabel,
+                    bmiCategory === 'overweight' && styles.categoryLabelActive,
+                  ]}
+                >
+                  Overweight
+                </Text>
+                <Text
+                  style={[
+                    styles.categoryLabel,
+                    bmiCategory === 'obese' && styles.categoryLabelActive,
+                  ]}
+                >
+                  Obese
+                </Text>
+              </View>
+            </View>
+
+            {/* 3. AI PERSONALIZED WORKOUT PROMPT CARD */}
+            <View style={styles.aiBannerCard}>
+              <View style={styles.aiBannerLeft}>
+                <Sparkles size={24} color="#0A0A0A" style={styles.aiBannerIcon} />
+                <View style={styles.aiBannerTextWrap}>
+                  <Text style={styles.aiBannerTitle}>AI Personalized Workout</Text>
+                  <Text style={styles.aiBannerSubtitle}>
+                    Get a custom workout plan designed just for you
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.generateButton}
+                onPress={() => setIsChoiceModalVisible(true)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.generateButtonText}>
+                  Create a Workout
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 4. "MY WORKOUTS" SECTION HEADER */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>My Workouts</Text>
+
+              <View style={styles.sectionActionsRow}>
+                <TouchableOpacity
+                  style={styles.modeToggleButton}
+                  onPress={() => setIsSelectMode((prev) => !prev)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modeToggleText}>
+                    {isSelectMode ? 'Cancel' : 'Edit'}
+                  </Text>
+                </TouchableOpacity>
+
+                {isSelectMode && selectedWorkoutIds.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={handleDeleteSelected}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Delete selected workouts"
+                  >
+                    <Trash2 size={18} color="#FF453A" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* 5. SEGMENTED TABS: [ Custom ] | [ Personalized ] */}
+            <View style={styles.tabsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.tabButton,
+                  activeTab === 'custom' && styles.tabButtonActive,
+                ]}
+                onPress={() => setActiveTab('custom')}
+                activeOpacity={0.85}
+              >
+                <SquarePen
+                  size={15}
+                  color={activeTab === 'custom' ? '#FFFFFF' : '#6B6B6B'}
+                  style={styles.tabIcon}
+                />
+                <Text
+                  style={[
+                    styles.tabButtonText,
+                    activeTab === 'custom' && styles.tabButtonTextActive,
+                  ]}
+                >
+                  Custom
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.tabButton,
+                  activeTab === 'personalized' && styles.tabButtonActive,
+                ]}
+                onPress={() => setActiveTab('personalized')}
+                activeOpacity={0.85}
+              >
+                <Sparkles
+                  size={15}
+                  color={activeTab === 'personalized' ? '#FFFFFF' : '#6B6B6B'}
+                  style={styles.tabIcon}
+                />
+                <Text
+                  style={[
+                    styles.tabButtonText,
+                    activeTab === 'personalized' && styles.tabButtonTextActive,
+                  ]}
+                >
+                  Personalized
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {error ? (
+              <ErrorCard message={error} onRetry={() => loadData(true)} />
+            ) : null}
+          </View>
+        }
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={styles.skeletonWrap}>
+              <WorkoutCardSkeleton />
+              <WorkoutCardSkeleton />
+            </View>
+          ) : (
             <EmptyState
               icon={Dumbbell}
-              title={searchQuery ? 'No Exercises Found' : 'No Workouts in Category'}
-              description={
-                searchQuery
-                  ? `No workouts match "${searchQuery}". Try searching for another muscle group or equipment.`
-                  : selectedCategory === 'favorites'
-                  ? 'You have not saved any workouts yet. Tap the bookmark icon on any workout to save it here.'
-                  : 'No exercises match the selected category. Try selecting another filter.'
+              title={
+                activeTab === 'personalized'
+                  ? 'No Personalized Workouts Yet'
+                  : 'No Custom Workouts'
               }
-              actionLabel={searchQuery ? 'Clear Search' : 'View All Exercises'}
-              onAction={() => {
-                if (searchQuery) {
-                  setSearchQuery('');
-                } else {
-                  setSelectedCategory('all');
-                }
-              }}
+              description={
+                activeTab === 'personalized'
+                  ? 'Tap "Generate" above to let AI craft an optimal hypertrophy routine for your body measurements.'
+                  : 'You have no custom workout routines created yet.'
+              }
+              actionLabel={
+                activeTab === 'personalized' ? 'Generate AI Routine' : undefined
+              }
+              onAction={
+                activeTab === 'personalized' ? handleGenerateAiWorkout : undefined
+              }
             />
-          }
-        />
-      )}
+          )
+        }
+      />
+
+      {/* Edit Height & Weight Modal */}
+      <Modal
+        visible={isEditBmiModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsEditBmiModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Update Measurements</Text>
+              <TouchableOpacity
+                onPress={() => setIsEditBmiModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={20} color="#8E8E8E" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>Height (cm)</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={inputHeight}
+                onChangeText={setInputHeight}
+                keyboardType="numeric"
+                placeholder="157"
+                placeholderTextColor="#71717A"
+              />
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>Weight (kg)</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={inputWeight}
+                onChangeText={setInputWeight}
+                keyboardType="numeric"
+                placeholder="62"
+                placeholderTextColor="#71717A"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalSaveButton}
+              onPress={handleSaveMeasurements}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalSaveButtonText}>Save & Recalculate</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 1. Choice Modal: Custom Workout vs Generate with AI */}
+      <Modal
+        visible={isChoiceModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsChoiceModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Create a Workout</Text>
+                <Text style={styles.modalSubtitle}>
+                  Choose how you want to build your routine
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsChoiceModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={20} color="#8E8E8E" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Option 1: Create Custom Workout */}
+            <TouchableOpacity
+              style={styles.choiceOptionCard}
+              onPress={() => {
+                setIsChoiceModalVisible(false);
+                navigation.navigate('WorkoutSelectScreen');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.choiceIconSquircle}>
+                <SquarePen size={20} color="#FFFFFF" />
+              </View>
+              <View style={styles.choiceTextWrap}>
+                <Text style={styles.choiceTitle}>Create Custom Workout</Text>
+                <Text style={styles.choiceDesc}>
+                  Select exercises from the workout library via checkboxes
+                </Text>
+              </View>
+              <ChevronRight size={18} color="#8E8E8E" />
+            </TouchableOpacity>
+
+            {/* Option 2: Generate with AI */}
+            <TouchableOpacity
+              style={styles.choiceOptionCard}
+              onPress={() => {
+                setIsChoiceModalVisible(false);
+                navigation.navigate('AiWorkoutGenerateScreen');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.choiceIconSquircle}>
+                <Sparkles size={20} color="#FFFFFF" />
+              </View>
+              <View style={styles.choiceTextWrap}>
+                <Text style={styles.choiceTitle}>Generate Workout with AI</Text>
+                <Text style={styles.choiceDesc}>
+                  Let AI craft a personalized plan tailored to your body metrics
+                </Text>
+              </View>
+              <ChevronRight size={18} color="#8E8E8E" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 2. Custom Workout Creation Form Modal */}
+      <Modal
+        visible={isCustomWorkoutModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsCustomWorkoutModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New Custom Workout</Text>
+              <TouchableOpacity
+                onPress={() => setIsCustomWorkoutModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={20} color="#8E8E8E" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>Workout Title</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={customTitle}
+                onChangeText={setCustomTitle}
+                placeholder="e.g. Chest & Triceps Blitz"
+                placeholderTextColor="#8E8E8E"
+              />
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>Muscle Focus</Text>
+              <View style={styles.categorySelectRow}>
+                {['Chest', 'Back', 'Legs', 'Arms', 'Full-Body'].map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[
+                      styles.categorySelectPill,
+                      customCategory === cat && styles.categorySelectPillActive,
+                    ]}
+                    onPress={() => setCustomCategory(cat)}
+                  >
+                    <Text
+                      style={[
+                        styles.categorySelectPillText,
+                        customCategory === cat && styles.categorySelectPillTextActive,
+                      ]}
+                    >
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.modalRowInputs}>
+              <View style={[styles.modalInputGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.modalInputLabel}>Duration (mins)</Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  value={customDuration}
+                  onChangeText={setCustomDuration}
+                  keyboardType="numeric"
+                  placeholder="45"
+                  placeholderTextColor="#8E8E8E"
+                />
+              </View>
+
+              <View style={[styles.modalInputGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.modalInputLabel}>Exercises</Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  value={customExercises}
+                  onChangeText={setCustomExercises}
+                  keyboardType="numeric"
+                  placeholder="5"
+                  placeholderTextColor="#8E8E8E"
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalSaveButton}
+              onPress={handleSaveCustomWorkout}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalSaveButtonText}>Save Workout</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -400,239 +975,490 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF', // Clean GymFlow white canvas
   },
-  header: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F2',
   },
-  headerRow: {
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5F5F7',
+  },
+  topHeaderTitle: {
+    fontSize: 18,
+    fontFamily: typography.fonts.headingBold,
+    color: '#0A0A0A',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 38,
+  },
+  historyHeaderButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5F5F7',
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 110, // clear floating tab bar
+  },
+  headerComponent: {
+    marginBottom: 8,
+  },
+
+  /* 1. TOP METRIC CARDS */
+  metricRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 20,
+  },
+  metricCard: {
+    flex: 1,
+    backgroundColor: '#F7F7F8',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EAEAED',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+  },
+  bmiHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    width: '100%',
+  },
+  metricLabel: {
+    fontSize: 11,
+    fontFamily: typography.fonts.headingBold,
+    color: '#6B6B6B',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  metricValue: {
+    fontSize: 28,
+    fontFamily: typography.fonts.headingBold,
+    color: '#0A0A0A',
+    marginTop: 4,
+    marginBottom: 2,
+    fontWeight: '800',
+  },
+  bmiValue: {
+    fontSize: 28,
+    fontFamily: typography.fonts.headingBold,
+    color: '#0A0A0A',
+    marginTop: 4,
+    fontWeight: '800',
+  },
+  metricUnit: {
+    fontSize: 12,
+    fontFamily: typography.fonts.headingMedium,
+    color: '#8E8E8E',
+  },
+
+  /* 2. BMI SLIDER */
+  bmiSliderSection: {
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  sliderTrack: {
+    height: 4,
+    backgroundColor: '#E5E5EA',
+    borderRadius: 2,
+    position: 'relative',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  sliderFilledTrack: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#0A0A0A',
+    borderRadius: 2,
+  },
+  sliderThumb: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#0A0A0A',
+    top: -5,
+    marginLeft: -7,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  sliderLabelsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
   },
-  title: {
+  categoryLabel: {
+    fontSize: 11,
+    fontFamily: typography.fonts.headingMedium,
+    color: '#8E8E93',
+  },
+  categoryLabelActive: {
+    color: '#0A0A0A',
     fontFamily: typography.fonts.headingBold,
-    fontSize: typography.sizes.xxl,
-    color: colors.text,
+    fontWeight: '700',
   },
-  subtitle: {
-    fontSize: typography.sizes.xs,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  searchContainer: {
+
+  /* 3. AI PERSONALIZED WORKOUT PROMPT */
+  aiBannerCard: {
+    backgroundColor: '#F7F7F8',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EAEAED',
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  aiBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 12,
+  },
+  aiBannerIcon: {
+    marginRight: 12,
+  },
+  aiBannerTextWrap: {
+    flex: 1,
+  },
+  aiBannerTitle: {
+    fontSize: 15,
+    fontFamily: typography.fonts.headingBold,
+    color: '#0A0A0A',
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  aiBannerSubtitle: {
+    fontSize: 12,
+    fontFamily: typography.fonts.body,
+    color: '#6B6B6B',
+    lineHeight: 16,
+  },
+  generateButton: {
+    backgroundColor: '#0A0A0A', // Signature GymFlow jet black button
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  generateButtonText: {
+    fontSize: 13,
+    fontFamily: typography.fonts.headingBold,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
+  /* 4. MY WORKOUTS SECTION HEADER */
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontFamily: typography.fonts.headingBold,
+    color: '#0A0A0A',
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  sectionActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modeToggleButton: {
+    backgroundColor: '#F5F5F7',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.sm,
+    borderColor: '#E5E5EA',
+  },
+  modeToggleText: {
+    fontSize: 13,
+    fontFamily: typography.fonts.headingMedium,
+    color: '#0A0A0A',
+    fontWeight: '600',
+  },
+  deleteButton: {
+    backgroundColor: '#FFF1F0',
+    padding: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFD6D6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* 5. SEGMENTED TABS */
+  tabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  tabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#EAEAED',
+    backgroundColor: '#F7F7F8',
+  },
+  tabButtonActive: {
+    backgroundColor: '#0A0A0A',
+    borderColor: '#0A0A0A',
+  },
+  tabIcon: {
+    marginRight: 8,
+  },
+  tabButtonText: {
+    fontSize: 14,
+    fontFamily: typography.fonts.headingMedium,
+    color: '#6B6B6B',
+    fontWeight: '600',
+  },
+  tabButtonTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
+  /* 6. WORKOUT CARDS */
+  workoutCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EAEAED',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  workoutCardSelected: {
+    borderColor: '#0A0A0A',
+    borderWidth: 1.5,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#D4D4D4',
+    backgroundColor: '#F7F7F8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  checkboxChecked: {
+    backgroundColor: '#0A0A0A',
+    borderColor: '#0A0A0A',
+  },
+  iconSquircle: {
+    width: 44,
     height: 44,
-  },
-  searchIcon: {
-    marginRight: spacing.xs,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: typography.sizes.sm,
-    color: colors.text,
-    paddingVertical: 0,
-  },
-  clearButton: {
-    padding: 6,
-  },
-  pillsContainer: {
-    marginVertical: spacing.xs,
-  },
-  pillsContent: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  pill: {
-    paddingHorizontal: spacing.md,
-    height: 38,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginRight: spacing.sm,
+    borderRadius: 12,
+    backgroundColor: '#0A0A0A', // Crisp black squircle
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
-  pillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  workoutInfo: {
+    flex: 1,
   },
-  pillText: {
-    color: colors.textSecondary,
-    fontSize: typography.sizes.xs,
-    fontWeight: '500',
-  },
-  pillTextActive: {
-    color: colors.textInverse,
-    fontWeight: '700',
-  },
-  recentSection: {
-    marginBottom: spacing.md,
-  },
-  recentTitle: {
+  workoutTitle: {
+    fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  recentContent: {
-    paddingRight: spacing.md,
-    gap: spacing.sm,
-  },
-  recentCard: {
-    width: 100,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.xs,
-    alignItems: 'center',
-  },
-  recentIllustration: {
-    width: 80,
-    height: 70,
-    borderWidth: 0,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.surfaceElevated,
-  },
-  recentCardTitle: {
-    fontFamily: typography.fonts.headingBlack,
-    fontSize: 11,
-    color: colors.text,
-    marginTop: 4,
-    textAlign: 'center',
-    width: '100%',
-  },
-  recentCardCategory: {
-    fontSize: 9,
-    color: colors.textMuted,
-    marginTop: 1,
-  },
-  listPadding: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: 110, // accommodate bottom tab bar
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  illustrationContainer: {
-    width: '100%',
-    height: 180,
-    backgroundColor: colors.surfaceElevated,
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-  },
-  cardIllustration: {
-    width: '100%',
-    height: '100%',
-    borderWidth: 0,
-    borderRadius: 0,
-    backgroundColor: 'transparent',
-  },
-  badgeWrapper: {
-    position: 'absolute',
-    bottom: 10,
-    right: 12,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  difficultyBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: borderRadius.full,
-  },
-  difficultyText: {
-    color: colors.text,
-    fontSize: 10,
+    color: '#0A0A0A',
     fontWeight: '700',
-    letterSpacing: 0.5,
+    marginBottom: 3,
   },
-  favoriteButton: {
-    position: 'absolute',
-    top: 10,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+  workoutMeta: {
+    fontSize: 12,
+    fontFamily: typography.fonts.body,
+    color: '#6B6B6B',
   },
-  favoriteButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+
+  skeletonWrap: {
+    paddingTop: 8,
   },
-  cardContent: {
-    padding: spacing.md,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardCategory: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  equipmentText: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginLeft: 4,
+
+  /* MODAL STYLES */
+  modalBackdrop: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
-  cardTitle: {
-    fontFamily: typography.fonts.headingBlack,
-    fontSize: typography.sizes.base,
-    color: colors.text,
+  modalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EAEAED',
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontFamily: typography.fonts.headingBold,
+    color: '#0A0A0A',
+    fontWeight: '700',
+  },
+  modalInputGroup: {
+    marginBottom: 14,
+  },
+  modalInputLabel: {
+    fontSize: 12,
+    fontFamily: typography.fonts.headingMedium,
+    color: '#6B6B6B',
+    marginBottom: 6,
+  },
+  modalTextInput: {
+    backgroundColor: '#F7F7F8',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#EAEAED',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#0A0A0A',
+    fontSize: 15,
+    fontFamily: typography.fonts.headingBold,
+  },
+  modalSaveButton: {
+    backgroundColor: '#0A0A0A',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  modalSaveButtonText: {
+    fontSize: 14,
+    fontFamily: typography.fonts.headingBold,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    fontFamily: typography.fonts.body,
+    color: '#6B6B6B',
     marginTop: 2,
-    marginBottom: spacing.xs,
   },
-  cardMetaRow: {
+  choiceOptionCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F7F7F8',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EAEAED',
+    padding: 14,
+    marginBottom: 12,
   },
-  metaItem: {
+  choiceIconSquircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#0A0A0A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  choiceTextWrap: {
+    flex: 1,
+    marginRight: 8,
+  },
+  choiceTitle: {
+    fontSize: 15,
+    fontFamily: typography.fonts.headingBold,
+    color: '#0A0A0A',
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  choiceDesc: {
+    fontSize: 12,
+    fontFamily: typography.fonts.body,
+    color: '#6B6B6B',
+    lineHeight: 16,
+  },
+  categorySelectRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  categorySelectPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F7',
+    borderWidth: 1,
+    borderColor: '#EAEAED',
+  },
+  categorySelectPillActive: {
+    backgroundColor: '#0A0A0A',
+    borderColor: '#0A0A0A',
+  },
+  categorySelectPillText: {
+    fontSize: 12,
+    color: '#6B6B6B',
+    fontWeight: '600',
+  },
+  categorySelectPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  modalRowInputs: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  metaText: {
-    fontSize: typography.sizes.xs,
-    color: colors.textSecondary,
-    marginLeft: 4,
   },
 });
-

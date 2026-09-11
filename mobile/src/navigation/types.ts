@@ -4,6 +4,7 @@ export type AuthStackParamList = {
   Login: undefined;
   ForcedPasswordReset: undefined;
   ForgotPassword: undefined;
+  ProfileSetup: { token?: string; user?: any; isGoogleAuth?: boolean } | undefined;
 };
 
 export type MainTabParamList = {
@@ -23,4 +24,8 @@ export type RootStackParamList = {
   AiFoodScannerScreen: undefined;
   WaterIntakeScreen: undefined;
   AiCoachScreen: undefined;
+  WorkoutSelectScreen: undefined;
+  CustomWorkoutDetailScreen: { routineId: string };
+  WorkoutHistoryScreen: undefined;
+  AiWorkoutGenerateScreen: undefined;
 };
