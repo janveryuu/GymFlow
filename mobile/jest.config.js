@@ -38,6 +38,7 @@ module.exports = {
     '^react-native/setup-env$': '<rootDir>/tests/setupPolyfills.ts',
     '^test-renderer$': '<rootDir>/tests/mocks/testRendererShim.js',
     '^test-renderer/(.*)$': '<rootDir>/node_modules/react-test-renderer/$1',
+    '^expo/src/winter/fetch(/.*)?$': '<rootDir>/tests/mocks/mockWinterFetch.js',
   },
   transform: {
     ...preset.transform,

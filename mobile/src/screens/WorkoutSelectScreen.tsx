@@ -216,6 +216,7 @@ export const WorkoutSelectScreen: React.FC = () => {
             <WorkoutIllustration
               slug={item.slug}
               size={56}
+              backgroundColor="#FFFFFF"
               containerStyle={styles.illustrationWrap}
             />
           ) : (
@@ -266,7 +267,7 @@ export const WorkoutSelectScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <ChevronLeft size={24} color="#0A0A0A" strokeWidth={2.5} />
+          <ChevronLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>Select Workouts</Text>
@@ -449,7 +450,7 @@ export const WorkoutSelectScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -457,9 +458,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F2',
+    borderBottomColor: colors.border,
   },
   backButton: {
     width: 38,
@@ -467,12 +468,12 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
   },
   headerTitle: {
     fontSize: 18,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -480,25 +481,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
   },
   doneButtonActive: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.primary,
   },
   doneButtonText: {
     fontSize: 13,
     fontFamily: typography.fonts.headingBold,
-    color: '#8E8E8E',
+    color: colors.textMuted,
     fontWeight: '700',
   },
   doneButtonTextActive: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
 
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 8,
@@ -506,7 +507,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 42,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
   },
   searchIcon: {
     marginRight: 8,
@@ -515,7 +516,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontFamily: typography.fonts.body,
-    color: '#0A0A0A',
+    color: colors.text,
     height: '100%',
   },
   clearButton: {
@@ -534,22 +535,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
   },
   pillActive: {
-    backgroundColor: '#0A0A0A',
-    borderColor: '#0A0A0A',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   pillText: {
     fontSize: 13,
     fontFamily: typography.fonts.headingMedium,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   pillTextActive: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '700',
   },
 
@@ -561,43 +562,43 @@ const styles = StyleSheet.create({
   workoutCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 12,
     marginBottom: 10,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 2,
   },
   workoutCardSelected: {
-    borderColor: '#0A0A0A',
+    borderColor: colors.primary,
     borderWidth: 1.5,
-    backgroundColor: '#FAFAFB',
+    backgroundColor: colors.surfaceElevated,
   },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#D4D4D4',
-    backgroundColor: '#F7F7F8',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   checkboxChecked: {
-    backgroundColor: '#0A0A0A',
-    borderColor: '#0A0A0A',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   thumbnailSquircle: {
     width: 52,
     height: 52,
     borderRadius: 12,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -608,7 +609,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderWidth: 0,
     borderRadius: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
   },
   workoutInfo: {
     flex: 1,
@@ -621,19 +622,19 @@ const styles = StyleSheet.create({
   categoryBadge: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     letterSpacing: 0.4,
   },
   equipmentText: {
     fontSize: 10,
-    color: '#8E8E8E',
+    color: colors.textMuted,
     marginLeft: 4,
     flex: 1,
   },
   workoutTitle: {
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     marginBottom: 4,
   },
@@ -649,11 +650,11 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 11,
     fontFamily: typography.fonts.body,
-    color: '#8E8E8E',
+    color: colors.textMuted,
   },
   metaDot: {
     marginHorizontal: 6,
-    color: '#D4D4D4',
+    color: colors.border,
     fontSize: 11,
   },
 
@@ -663,8 +664,10 @@ const styles = StyleSheet.create({
     bottom: 24,
     left: 16,
     right: 16,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -672,7 +675,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 8,
   },
@@ -683,19 +686,19 @@ const styles = StyleSheet.create({
   floatingCount: {
     fontSize: 14,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
   },
   floatingSubtext: {
     fontSize: 11,
     fontFamily: typography.fonts.body,
-    color: '#8E8E8E',
+    color: colors.textMuted,
     marginTop: 1,
   },
   floatingActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262626',
+    backgroundColor: colors.primary,
     paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 10,
@@ -704,14 +707,14 @@ const styles = StyleSheet.create({
   floatingActionBtnText: {
     fontSize: 13,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '700',
   },
 
   /* Modal */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -719,14 +722,14 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 20,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 8,
   },
@@ -739,13 +742,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
   },
   modalSubtitle: {
     fontSize: 12,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     lineHeight: 16,
     marginBottom: 16,
   },
@@ -755,22 +758,22 @@ const styles = StyleSheet.create({
   modalInputLabel: {
     fontSize: 12,
     fontFamily: typography.fonts.headingMedium,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   modalTextInput: {
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#0A0A0A',
+    color: colors.text,
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
   },
   modalSaveButton: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
@@ -778,7 +781,7 @@ const styles = StyleSheet.create({
   modalSaveButtonText: {
     fontSize: 14,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '700',
   },
 });

@@ -109,7 +109,7 @@ export const GymFlowWordmark: React.FC<GymFlowWordmarkProps> = ({
   }
 
   // Determine source and tintColor
-  let source = TEXT_DARK_SOURCE;
+  let source = TEXT_WHITE_SOURCE;
   let computedTint: string | undefined;
 
   if (color) {
@@ -122,8 +122,8 @@ export const GymFlowWordmark: React.FC<GymFlowWordmarkProps> = ({
     // Dark text on light surface
     source = TEXT_DARK_SOURCE;
   } else {
-    // Auto: Default to dark text because the app design system is light-first (#FAFAFA)
-    source = TEXT_DARK_SOURCE;
+    // Auto: Default to white text because the app design system is black-first (#000000)
+    source = TEXT_WHITE_SOURCE;
   }
 
   const imageStyle: StyleProp<ImageStyle> = [

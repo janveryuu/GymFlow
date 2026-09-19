@@ -20,6 +20,7 @@ interface PercentRingProps {
   textColor?: string;
   label?: string;
   showPercentageText?: boolean;
+  children?: React.ReactNode;
 }
 
 export const PercentRing: React.FC<PercentRingProps> = ({
@@ -31,6 +32,7 @@ export const PercentRing: React.FC<PercentRingProps> = ({
   textColor,
   label,
   showPercentageText = true,
+  children,
 }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -79,12 +81,18 @@ export const PercentRing: React.FC<PercentRingProps> = ({
         />
       </Svg>
       <View style={styles.content}>
-        {showPercentageText && (
-          <Text style={[styles.percentageText, { fontSize: size * 0.22, color: textColor || colors.text }]}>
-            {Math.round(clamped)}%
-          </Text>
+        {children ? (
+          children
+        ) : (
+          <>
+            {showPercentageText && (
+              <Text style={[styles.percentageText, { fontSize: size * 0.22, color: textColor || colors.text }]}>
+                {Math.round(clamped)}%
+              </Text>
+            )}
+            {label ? <Text style={[styles.labelText, { color: textColor ? 'rgba(255,255,255,0.7)' : colors.textMuted }]}>{label}</Text> : null}
+          </>
         )}
-        {label ? <Text style={[styles.labelText, { color: textColor ? 'rgba(255,255,255,0.7)' : colors.textMuted }]}>{label}</Text> : null}
       </View>
     </View>
   );

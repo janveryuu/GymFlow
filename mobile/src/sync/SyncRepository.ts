@@ -534,6 +534,9 @@ export class SyncRepository implements ISyncRepository {
       if (pref.workout_type !== undefined) { updates.push('workout_type = ?'); params.push(pref.workout_type); }
       if (pref.intensity !== undefined) { updates.push('intensity = ?'); params.push(pref.intensity); }
       if (pref.weekly_workout_goal !== undefined) { updates.push('weekly_workout_goal = ?'); params.push(pref.weekly_workout_goal); }
+      if (pref.daily_nutrition_target_calories !== undefined) { updates.push('daily_nutrition_target_calories = ?'); params.push(pref.daily_nutrition_target_calories); }
+      if (pref.weight_kg !== undefined) { updates.push('weight_kg = ?'); params.push(pref.weight_kg); }
+      if (pref.fitness_goal !== undefined) { updates.push('fitness_goal = ?'); params.push(pref.fitness_goal); }
       if (updates.length > 0) {
         params.push('default');
         await db.runAsync(
@@ -561,6 +564,9 @@ export class SyncRepository implements ISyncRepository {
       workout_type: pref.workout_type ?? current?.workout_type ?? 'full-body',
       intensity: pref.intensity ?? current?.intensity ?? 'moderate',
       weekly_workout_goal: pref.weekly_workout_goal ?? current?.weekly_workout_goal ?? 5,
+      daily_nutrition_target_calories: pref.daily_nutrition_target_calories ?? current?.daily_nutrition_target_calories,
+      weight_kg: pref.weight_kg ?? current?.weight_kg,
+      fitness_goal: pref.fitness_goal ?? current?.fitness_goal,
       updated_at: new Date().toISOString(),
     };
   }

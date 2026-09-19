@@ -9,14 +9,12 @@ import {
   Animated,
   Easing,
   Platform,
+  Alert,
 } from 'react-native';
 import {
   Camera,
   ScanBarcode,
-  MessageSquare,
-  Droplets,
-  Utensils,
-  Calendar,
+  PenLine,
   X,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +22,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { typography } from '../theme';
+import { useAuthStore } from '../store/authStore';
 
 type QuickActionsSheetProps = {
   visible: boolean;
@@ -35,11 +34,14 @@ interface ActionItem {
   label: string;
   icon: React.FC<{ color: string; size: number }>;
   screen: string;
+  params?: any;
 }
 
 export const QuickActionsSheet: React.FC<QuickActionsSheetProps> = ({ visible, onClose }) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const user = useAuthStore((state) => state.user);
+  const isProfileComplete = Boolean(user?.is_profile_completed);
 
   // Entrance pop & fade animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -67,31 +69,42 @@ export const QuickActionsSheet: React.FC<QuickActionsSheetProps> = ({ visible, o
     }
   }, [visible, fadeAnim, scaleAnim]);
 
-  const handleAction = (screen: string) => {
+  const handleAction = (screen: string, params?: any) => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch {
       // Haptics optional
     }
     onClose();
+
+    if (!isProfileComplete) {
+      setTimeout(() => {
+        Alert.alert(
+          'Profile Setup Required',
+          'Please complete your profile setup first before logging food.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Set Up Profile',
+              onPress: () => navigation.navigate('ProfileSetup'),
+            },
+          ]
+        );
+      }, 180);
+      return;
+    }
+
     setTimeout(() => {
-      navigation.navigate(screen);
+      navigation.navigate(screen, params);
     }, 120);
   };
 
-  // Section 1: All 6 Original Tools & Scanners (Row 1 & Row 2)
-  const toolsRow1: ActionItem[] = [
-    { id: 'ai_scan', label: 'AI Scanner', icon: Camera, screen: 'AiFoodScannerScreen' },
+  // 3 Choices: AI Camera, Barcode, Manual
+  const tools: ActionItem[] = [
+    { id: 'ai_camera', label: 'AI Camera', icon: Camera, screen: 'AiFoodScannerScreen' },
     { id: 'barcode', label: 'Barcode', icon: ScanBarcode, screen: 'BarcodeScannerScreen' },
-    { id: 'coach', label: 'AI Coach', icon: MessageSquare, screen: 'AiCoachScreen' },
+    { id: 'manual', label: 'Manual', icon: PenLine, screen: 'NutritionScreen', params: { openManualEntry: true } },
   ];
-
-  const toolsRow2: ActionItem[] = [
-    { id: 'water', label: 'Water Tracker', icon: Droplets, screen: 'WaterIntakeScreen' },
-    { id: 'nutrition', label: 'Nutrition', icon: Utensils, screen: 'NutritionScreen' },
-    { id: 'schedule', label: 'Schedule', icon: Calendar, screen: 'ScheduleScreen' },
-  ];
-
 
   const renderActionCircle = (item: ActionItem) => {
     const IconComponent = item.icon;
@@ -99,7 +112,7 @@ export const QuickActionsSheet: React.FC<QuickActionsSheetProps> = ({ visible, o
       <TouchableOpacity
         key={item.id}
         style={styles.actionItemWrapper}
-        onPress={() => handleAction(item.screen)}
+        onPress={() => handleAction(item.screen, item.params)}
         activeOpacity={0.82}
       >
         <View style={styles.actionCircle}>
@@ -128,16 +141,10 @@ export const QuickActionsSheet: React.FC<QuickActionsSheetProps> = ({ visible, o
           {/* Main Destination Title */}
           <Text style={styles.destinationTitle}>Navigate to your destination</Text>
 
-          {/* All 6 Tools & Scanners */}
+          {/* 3 Quick Action Choices */}
           <View style={styles.sectionBlock}>
-            {/* Row 1: AI Scanner, Barcode, AI Coach */}
             <View style={styles.actionRow}>
-              {toolsRow1.map(renderActionCircle)}
-            </View>
-
-            {/* Row 2: Water Tracker, Nutrition, Schedule */}
-            <View style={styles.actionRow}>
-              {toolsRow2.map(renderActionCircle)}
+              {tools.map(renderActionCircle)}
             </View>
           </View>
 

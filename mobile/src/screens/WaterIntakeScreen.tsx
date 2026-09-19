@@ -4,11 +4,12 @@ import {
   ScrollView, SafeAreaView, Alert, Modal, Pressable, Dimensions,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, Droplets, Plus, X } from 'lucide-react-native';
-import Svg, { Rect, Text as SvgText } from 'react-native-svg';
+import { ArrowLeft, Droplets, Plus, X, Lock } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, borderRadius } from '../theme';
 import { PercentRing } from '../components/PercentRing';
 import { getDatabase } from '../db/connection';
+import { useAuthStore } from '../store/authStore';
 import * as Crypto from 'expo-crypto';
 
 // ---------------------------------------------------------------------------
@@ -31,20 +32,10 @@ function localDateKey(): string {
 interface WaterEntry { id: string; amount_ml: number; logged_at: string; }
 interface DayHistory  { date_key: string; total_ml: number; }
 
-const CHART_WIDTH  = Dimensions.get('window').width - 80;
-const CHART_HEIGHT = 90;
-
-const WATER_COLORS = {
-  primary: '#0EA5E9',         // Vibrant water / ocean blue
-  primaryDark: '#0284C7',     // Deep ocean blue
-  surface: '#F0F9FF',         // Refreshing soft water card background
-  surfaceElevated: '#E0F2FE', // Lighter water tint
-  border: '#BAE6FD',          // Clean sky/water border
-  track: '#E0F2FE',           // Ring background track
-};
-
 export const WaterIntakeScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+  const user = useAuthStore((state) => state.user);
+  const isProfileComplete = Boolean(user?.is_profile_completed);
 
   const [weightKg,     setWeightKg]     = useState(70);
   const [intensity,    setIntensity]    = useState('moderate');
@@ -60,6 +51,10 @@ export const WaterIntakeScreen: React.FC = () => {
   const percentage    = Math.min((currentIntake / dailyTarget) * 100, 100);
 
   const loadData = useCallback(async () => {
+    if (!isProfileComplete) {
+      setIsLoading(false);
+      return;
+    }
     try {
       const db = await getDatabase();
       const prefs = await db.getFirstAsync<{ weight_kg: number | null; intensity: string }>(
@@ -87,9 +82,12 @@ export const WaterIntakeScreen: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [dateKey]);
+  }, [isProfileComplete, dateKey]);
 
-  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+  useFocusEffect(useCallback(() => {
+    if (!isProfileComplete) return;
+    loadData();
+  }, [isProfileComplete, loadData]));
 
   const logWater = async (amountMl: number) => {
     if (!amountMl || amountMl <= 0) return;
@@ -126,19 +124,53 @@ export const WaterIntakeScreen: React.FC = () => {
     } catch (err) { console.error('[WaterIntake] deleteEntry:', err); }
   };
 
-  // Build 7-day bar-chart data (fill missing days with 0)
-  const chartDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const label = ['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()];
-    const found = weekHistory.find(h => h.date_key === key);
-    return { key, label, total_ml: found?.total_ml ?? 0 };
-  });
-  const maxBarMl = Math.max(...chartDays.map(d => d.total_ml), dailyTarget, 1);
+  if (!isProfileComplete) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft color={colors.text} size={24} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Water Intake</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
-  const barGap   = CHART_WIDTH / 7;
-  const barW     = barGap * 0.52;
+        <View style={styles.gateContainer}>
+          <View style={styles.gateIconWrapper}>
+            <Lock size={38} color="#00E5FF" />
+          </View>
+          <Text style={styles.gateTitle}>Profile Setup Required</Text>
+          <Text style={styles.gateMessage}>
+            You must complete the profile setup in order to use this feature. Setting your weight and intensity is required to calculate accurate daily hydration targets.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.gatePrimaryBtn}
+            onPress={() => navigation.navigate('ProfileSetup')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Complete Profile Setup"
+          >
+            <Text style={styles.gatePrimaryBtnText}>Complete Profile Setup</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.gateSecondaryBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Go Back"
+          >
+            <Text style={styles.gateSecondaryBtnText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -157,16 +189,13 @@ export const WaterIntakeScreen: React.FC = () => {
             percentage={percentage}
             size={200}
             strokeWidth={16}
-            color={WATER_COLORS.primary}
-            trackColor={WATER_COLORS.track}
+            color={colors.cyan}
+            trackColor={colors.cyanMuted}
             label={`${currentIntake} / ${dailyTarget} ml`}
             showPercentageText
           />
           <Text style={styles.targetLabel}>
             Daily target: {dailyTarget} ml
-          </Text>
-          <Text style={styles.formulaNote}>
-            {weightKg} kg × 35 ml{intensity.toUpperCase() === 'HIGH' ? ' + 500 ml (HIGH)' : ''}
           </Text>
         </View>
 
@@ -174,49 +203,50 @@ export const WaterIntakeScreen: React.FC = () => {
         <Text style={styles.sectionTitle}>Quick Add</Text>
         <View style={styles.quickGrid}>
           <View style={styles.quickRow}>
-            <TouchableOpacity style={styles.quickBtn} onPress={() => logWater(250)} activeOpacity={0.85}>
-              <Droplets color={colors.textInverse} size={18} />
-              <Text style={styles.quickBtnText}>+250 ml</Text>
+            <TouchableOpacity
+              style={styles.quickBtnWrapper}
+              onPress={() => logWater(250)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.quickBtnGradient}>
+                <Droplets color="#000000" size={18} />
+                <Text style={[styles.quickBtnText, { color: '#000000' }]}>+250 ml</Text>
+              </View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickBtn} onPress={() => logWater(500)} activeOpacity={0.85}>
-              <Droplets color={colors.textInverse} size={18} />
-              <Text style={styles.quickBtnText}>+500 ml</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.quickRow}>
-            <TouchableOpacity style={styles.quickBtn} onPress={() => logWater(750)} activeOpacity={0.85}>
-              <Droplets color={colors.textInverse} size={18} />
-              <Text style={styles.quickBtnText}>+750 ml</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.quickBtn, styles.quickBtnOutline]} onPress={() => setShowModal(true)} activeOpacity={0.85}>
-              <Plus color={WATER_COLORS.primaryDark} size={18} />
-              <Text style={[styles.quickBtnText, { color: WATER_COLORS.primaryDark }]}>Custom</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        {/* 7-Day Bar Chart */}
-        <Text style={styles.sectionTitle}>Last 7 Days</Text>
-        <View style={styles.chartCard}>
-          <Svg width={CHART_WIDTH} height={CHART_HEIGHT + 20}>
-            {chartDays.map((day, i) => {
-              const barH   = Math.max(2, (day.total_ml / maxBarMl) * CHART_HEIGHT);
-              const x      = i * barGap + (barGap - barW) / 2;
-              const isToday = day.key === dateKey;
-              return (
-                <React.Fragment key={day.key}>
-                  <Rect x={x} y={CHART_HEIGHT - barH} width={barW} height={barH} rx={4}
-                    fill={isToday ? WATER_COLORS.primary : 'rgba(14, 165, 233, 0.22)'} />
-                  <SvgText x={x + barW / 2} y={CHART_HEIGHT + 14} textAnchor="middle"
-                    fontSize={10}
-                    fill={isToday ? WATER_COLORS.primaryDark : colors.textMuted}>
-                    {day.label}
-                  </SvgText>
-                </React.Fragment>
-              );
-            })}
-          </Svg>
-          <Text style={styles.chartCaption}>Target {dailyTarget} ml/day · today highlighted</Text>
+            <TouchableOpacity
+              style={styles.quickBtnWrapper}
+              onPress={() => logWater(500)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.quickBtnGradient}>
+                <Droplets color="#000000" size={18} />
+                <Text style={[styles.quickBtnText, { color: '#000000' }]}>+500 ml</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.quickRow}>
+            <TouchableOpacity
+              style={styles.quickBtnWrapper}
+              onPress={() => logWater(750)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.quickBtnGradient}>
+                <Droplets color="#000000" size={18} />
+                <Text style={[styles.quickBtnText, { color: '#000000' }]}>+750 ml</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickBtn, styles.quickBtnOutline]}
+              onPress={() => setShowModal(true)}
+              activeOpacity={0.85}
+            >
+              <Plus color={colors.text} size={18} />
+              <Text style={[styles.quickBtnText, { color: colors.text }]}>Custom</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Today's Log */}
@@ -225,15 +255,15 @@ export const WaterIntakeScreen: React.FC = () => {
           <View style={styles.emptyCard}><Text style={styles.emptyText}>Loading…</Text></View>
         ) : todayEntries.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Droplets color={WATER_COLORS.primary} size={32} />
+            <Droplets color={colors.textMuted} size={32} />
             <Text style={styles.emptyText}>No water logged yet today.</Text>
             <Text style={styles.emptySubtext}>Use the quick-add buttons above to get started.</Text>
           </View>
         ) : (
           <View style={styles.logList}>
             {todayEntries.map(entry => (
-              <View key={entry.id} style={styles.logRow}>
-                <Droplets color={WATER_COLORS.primary} size={16} />
+              <View key={entry.id} style={styles.logCard}>
+                <Droplets color={colors.cyan} size={18} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.logAmount}>{entry.amount_ml} ml</Text>
                   <Text style={styles.logTime}>
@@ -292,16 +322,16 @@ const styles = StyleSheet.create({
   sectionTitle:  { fontSize: typography.sizes.base, fontFamily: typography.fonts.headingBold, color: colors.text, marginBottom: 12, marginTop: 6 },
   quickGrid:     { gap: 10, marginBottom: 24 },
   quickRow:      { flexDirection: 'row', gap: 10 },
-  quickBtn:      { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: WATER_COLORS.primary, paddingVertical: 14, paddingHorizontal: 12, borderRadius: borderRadius.lg, gap: 8 },
-  quickBtnOutline: { backgroundColor: WATER_COLORS.surface, borderWidth: 1.5, borderColor: WATER_COLORS.border },
+  quickBtnWrapper: { flex: 1, borderRadius: borderRadius.lg, overflow: 'hidden' },
+  quickBtnGradient: { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 12, borderRadius: borderRadius.lg, gap: 8, backgroundColor: '#FFFFFF' },
+  quickBtn:      { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, paddingVertical: 14, paddingHorizontal: 12, borderRadius: borderRadius.lg, gap: 8 },
+  quickBtnOutline: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   quickBtnText:  { color: colors.textInverse, fontWeight: '700', fontSize: typography.sizes.sm },
-  chartCard:     { backgroundColor: WATER_COLORS.surface, borderRadius: borderRadius.lg, borderWidth: 1.5, borderColor: WATER_COLORS.border, padding: 16, marginBottom: 24, alignItems: 'center' },
-  chartCaption:  { fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 8 },
-  emptyCard:     { backgroundColor: WATER_COLORS.surface, borderRadius: borderRadius.lg, borderWidth: 1.5, borderColor: WATER_COLORS.border, padding: 32, alignItems: 'center', gap: 8 },
+  emptyCard:     { backgroundColor: colors.surface, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, padding: 32, alignItems: 'center', gap: 8 },
   emptyText:     { fontSize: typography.sizes.sm, fontWeight: '500', color: colors.textSecondary, textAlign: 'center' },
   emptySubtext:  { fontSize: typography.sizes.xs, color: colors.textMuted, textAlign: 'center' },
-  logList:       { backgroundColor: WATER_COLORS.surface, borderRadius: borderRadius.lg, borderWidth: 1.5, borderColor: WATER_COLORS.border, overflow: 'hidden' },
-  logRow:        { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: WATER_COLORS.border },
+  logList:       { gap: 10 },
+  logCard:       { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, shadowColor: '#000000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
   logAmount:     { fontSize: typography.sizes.sm, fontWeight: '700', color: colors.text },
   logTime:       { fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 2 },
   overlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
@@ -311,6 +341,78 @@ const styles = StyleSheet.create({
   modalRow:      { flexDirection: 'row', gap: 12 },
   cancelBtn:     { flex: 1, padding: 14, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   cancelText:    { fontSize: typography.sizes.sm, fontWeight: '500', color: colors.textSecondary },
-  addBtn:        { flex: 1, padding: 14, borderRadius: borderRadius.md, backgroundColor: WATER_COLORS.primary, alignItems: 'center' },
+  addBtn:        { flex: 1, padding: 14, borderRadius: borderRadius.md, backgroundColor: colors.primary, alignItems: 'center' },
   addText:       { fontSize: typography.sizes.sm, fontWeight: '700', color: colors.textInverse },
+  gateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingBottom: 40,
+  },
+  gateIconWrapper: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 229, 255, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  gateTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: typography.fonts.headingBold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  gateMessage: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: typography.fonts.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  gatePrimaryBtn: {
+    backgroundColor: '#FFD600',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#FFD600',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  gatePrimaryBtnText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: typography.fonts.headingBold,
+  },
+  gateSecondaryBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2C2C2E',
+    backgroundColor: '#1C1C1E',
+  },
+  gateSecondaryBtnText: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: typography.fonts.body,
+  },
 });

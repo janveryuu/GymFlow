@@ -52,6 +52,15 @@ export const migrations: Migration[] = [
       } catch {}
     },
   },
+  {
+    version: 4,
+    name: 'v4_add_fitness_goal_to_preferences',
+    up: async (db: SQLiteDatabase) => {
+      try {
+        await db.execAsync('ALTER TABLE Preferences ADD COLUMN fitness_goal TEXT;');
+      } catch {}
+    },
+  },
 ];
 
 /**

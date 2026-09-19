@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, AccessibilityProps, StyleProp, ViewStyle } from 'react-native';
 import { LucideIcon } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, borderRadius, spacing } from '../theme';
 
 interface EmptyStateProps extends AccessibilityProps {
@@ -9,6 +10,9 @@ interface EmptyStateProps extends AccessibilityProps {
   description: string;
   actionLabel?: string;
   onAction?: () => void;
+  actionGradientColors?: [string, string, ...string[]];
+  actionBackgroundColor?: string;
+  actionTextColor?: string;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -18,6 +22,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   description,
   actionLabel,
   onAction,
+  actionGradientColors,
+  actionBackgroundColor,
+  actionTextColor,
   style,
   ...accessibilityProps
 }) => {
@@ -34,13 +41,31 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       <Text style={styles.description}>{description}</Text>
       {actionLabel && onAction && (
         <TouchableOpacity
-          style={styles.actionButton}
+          style={[
+            actionGradientColors ? styles.actionButtonGradientWrap : styles.actionButton,
+            actionBackgroundColor ? { backgroundColor: actionBackgroundColor, borderColor: actionBackgroundColor } : null,
+          ]}
           onPress={onAction}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
         >
-          <Text style={styles.actionButtonText}>{actionLabel}</Text>
+          {actionGradientColors ? (
+            <LinearGradient
+              colors={actionGradientColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.actionButtonGradient}
+            >
+              <Text style={[styles.actionButtonGradientText, actionTextColor ? { color: actionTextColor } : null]}>
+                {actionLabel}
+              </Text>
+            </LinearGradient>
+          ) : (
+            <Text style={[styles.actionButtonText, actionTextColor ? { color: actionTextColor, fontWeight: '700' } : null]}>
+              {actionLabel}
+            </Text>
+          )}
         </TouchableOpacity>
       )}
     </View>
@@ -109,6 +134,33 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.sizes.sm,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  actionButtonGradientWrap: {
+    marginTop: spacing.md,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+    alignSelf: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  actionButtonGradient: {
+    paddingHorizontal: spacing.lg + 4,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.full,
+    minHeight: 44,
+    minWidth: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonGradientText: {
+    fontFamily: typography.fonts.headingBold,
+    fontSize: typography.sizes.sm,
+    color: '#000000',
+    fontWeight: '700',
     textAlign: 'center',
   },
 });

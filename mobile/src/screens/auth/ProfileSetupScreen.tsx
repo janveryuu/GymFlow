@@ -1,1037 +1,1589 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
-  Image,
-  Animated,
-  Easing,
+  ActivityIndicator,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  PanResponder,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowRight, ArrowLeft, AlertCircle, Zap } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path, Line, Polygon, Text as SvgText } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
+import {
+  ArrowLeft,
+  Check,
+  User,
+  ChevronRight,
+  Shield,
+} from 'lucide-react-native';
 import { colors, typography, borderRadius, spacing } from '../../theme';
-import { CalendarPicker } from '../../components/CalendarPicker';
-import { GlassmorphismSlider } from '../../components/GlassmorphismSlider';
-import { FloatingLabelInput } from '../../components/FloatingLabelInput';
 import { useAuthStore } from '../../store/authStore';
-import { apiClient } from '../../api/client';
+import { getSyncRepository } from '../../sync/SyncRepository';
+import { getDatabase } from '../../db/connection';
+import { calculateDailyCalorieTarget } from '../../utils/nutritionCalculator';
 
 interface ProfileSetupScreenProps {
-  route: {
-    params?: {
-      token?: string;
-      user?: any;
-      isGoogleAuth?: boolean;
-      autofill?: boolean;
-    };
-  };
   navigation: any;
+  route?: any;
 }
 
-export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ route, navigation }) => {
-  const incomingUser = route?.params?.user || { name: '', email: '' };
-  const incomingToken = route?.params?.token || '';
-  const setAuth = useAuthStore((state) => state.setAuth);
-  const isAutofill = Boolean(route?.params?.autofill);
+type GenderOption = 'male' | 'female' | 'prefer_not_to_say';
 
-  // Step state: 1 to 5 (1-4 are wizard steps, 5 is welcome screen)
-  const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 5;
+const ITEM_HEIGHT = 46;
+const VISIBLE_ROWS = 5;
+const CONTAINER_HEIGHT = ITEM_HEIGHT * VISIBLE_ROWS; // 230px
+const PADDING_VERTICAL = (CONTAINER_HEIGHT - ITEM_HEIGHT) / 2; // 92px
 
-  // Slide 1: Name & Contact
-  const [firstName, setFirstName] = useState(isAutofill ? (incomingUser.name?.split(' ')[0] || 'Jane') : '');
-  const [lastName, setLastName] = useState(isAutofill ? (incomingUser.name?.split(' ').slice(1).join(' ') || 'Doe') : '');
-  const [phone, setPhone] = useState(isAutofill ? '+1 (555) 234-5678' : '');
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
-  // Slide 2: Gender Selection
-  const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>(isAutofill ? 'female' : '');
-  const [genderError, setGenderError] = useState(false);
+const MIN_YEAR = 1940;
+const MAX_YEAR = new Date().getFullYear() - 12;
 
-  // Slide 3: Birthdate
-  const [birthdate, setBirthdate] = useState<Date>(isAutofill ? new Date(1998, 4, 15) : new Date(2000, 0, 15));
+export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigation, route }) => {
+  const { user, updateUser } = useAuthStore();
+  const repo = getSyncRepository();
 
-  // Slide 4: Weight & Height
-  const [weight, setWeight] = useState(isAutofill ? '65' : '');
+  // Step indicator: 1 = Gender, 2 = Birthdate, 3 = Weight, 4 = Height
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Step 1: Gender
+  const [gender, setGender] = useState<GenderOption>('male');
+
+  // Step 2: Birthdate (Defaults to July 15, 2000)
+  const [birthYear, setBirthYear] = useState<number>(() => {
+    if (user?.birthdate) {
+      const parsed = parseInt(user.birthdate.split('-')[0] ?? '', 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return 2000;
+  });
+  const [birthMonth, setBirthMonth] = useState<number>(() => {
+    if (user?.birthdate) {
+      const parsed = parseInt(user.birthdate.split('-')[1] ?? '', 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return 7; // July
+  });
+  const [birthDay, setBirthDay] = useState<number>(() => {
+    if (user?.birthdate) {
+      const parsed = parseInt(user.birthdate.split('-')[2] ?? '', 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return 15;
+  });
+
+  // Step 3: Weight
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
-  const [height, setHeight] = useState(isAutofill ? '170' : '');
+  const [weightKg, setWeightKg] = useState<number>(70);
+  const [dialWeight, setDialWeight] = useState<number>(70);
+  const dialWeightRef = useRef<number>(70);
+  dialWeightRef.current = dialWeight;
+  const weightUnitRef = useRef<'kg' | 'lbs'>('kg');
+  weightUnitRef.current = weightUnit;
+  const dragStartWeight = useRef<number>(70);
+  const lastHapticWeight = useRef<number>(70);
+
+  // Step 3 Rainbow Arch Geometry (Gentle Curve & Crisp White)
+  const { width: windowWidth } = useWindowDimensions();
+  const dialCardWidth = windowWidth;
+  const DIAL_HEIGHT = 195;
+  const DIAL_RADIUS = Math.max(330, Math.round(windowWidth * 0.95));
+  const ARC_TOP = 48;
+  const centerX = dialCardWidth / 2;
+  const centerY = ARC_TOP + DIAL_RADIUS;
+  const ANGLE_PER_UNIT = 0.024; // ~1.38 degrees per unit for gentle curve
+
+  const deltaXEdge = dialCardWidth / 2;
+  const underSqrt = Math.max(0, DIAL_RADIUS * DIAL_RADIUS - deltaXEdge * deltaXEdge);
+  const yEdge = centerY - Math.sqrt(underSqrt);
+  const rainbowArcPath = `M 0,${yEdge.toFixed(1)} A ${DIAL_RADIUS},${DIAL_RADIUS} 0 0,1 ${dialCardWidth},${yEdge.toFixed(1)}`;
+
+  const innerArcRadius = DIAL_RADIUS - 52;
+  const underSqrtInner = Math.max(0, innerArcRadius * innerArcRadius - deltaXEdge * deltaXEdge);
+  const yInnerEdge = centerY - Math.sqrt(underSqrtInner);
+  const innerRainbowPath = `M 0,${yInnerEdge.toFixed(1)} A ${innerArcRadius},${innerArcRadius} 0 0,1 ${dialCardWidth},${yInnerEdge.toFixed(1)}`;
+
+  const handleToggleWeightUnit = (unit: 'kg' | 'lbs') => {
+    if (unit === weightUnit) return;
+    triggerHaptic();
+    setWeightUnit(unit);
+    if (unit === 'lbs') {
+      const lbs = Math.round(weightKg * 2.20462);
+      setDialWeight(lbs);
+    } else {
+      setDialWeight(weightKg);
+    }
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 3;
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        dragStartWeight.current = dialWeightRef.current;
+        lastHapticWeight.current = Math.round(dialWeightRef.current);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const currentUnit = weightUnitRef.current;
+        const minVal = currentUnit === 'kg' ? 30 : 66;
+        const maxVal = currentUnit === 'kg' ? 250 : 550;
+        const delta = -gestureState.dx / 6.8;
+        const raw = dragStartWeight.current + delta;
+        const clamped = Math.max(minVal, Math.min(maxVal, raw));
+        setDialWeight(clamped);
+
+        const rounded = Math.round(clamped);
+        if (rounded !== lastHapticWeight.current) {
+          lastHapticWeight.current = rounded;
+          try {
+            Haptics.selectionAsync();
+          } catch {}
+        }
+      },
+      onPanResponderRelease: () => {
+        const currentUnit = weightUnitRef.current;
+        const rounded = Math.round(dialWeightRef.current);
+        setDialWeight(rounded);
+        if (currentUnit === 'kg') {
+          setWeightKg(rounded);
+        } else {
+          setWeightKg(Math.round(rounded / 2.20462));
+        }
+      },
+    })
+  ).current;
+
+  const { dialTicks, dialLabels } = useMemo(() => {
+    const ticks: Array<{
+      val: number;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      stroke: string;
+      strokeWidth: number;
+    }> = [];
+
+    const labels: Array<{
+      val: number;
+      x: number;
+      y: number;
+      deg: number;
+    }> = [];
+
+    const minVal = weightUnit === 'kg' ? 30 : 66;
+    const maxVal = weightUnit === 'kg' ? 250 : 550;
+
+    const startW = Math.max(minVal, Math.floor(dialWeight - 25));
+    const endW = Math.min(maxVal, Math.ceil(dialWeight + 25));
+
+    for (let w = startW; w <= endW; w++) {
+      const angle = (w - dialWeight) * ANGLE_PER_UNIT;
+      if (Math.abs(angle) > 0.56) continue;
+
+      const isMajor = w % 10 === 0;
+      const isMedium = w % 5 === 0;
+
+      const tickLen = isMajor ? 22 : isMedium ? 15 : 9;
+      const stroke = '#FFFFFF';
+      const strokeWidth = isMajor ? 2.2 : isMedium ? 1.6 : 1.2;
+
+      const sin = Math.sin(angle);
+      const cos = Math.cos(angle);
+
+      const x1 = centerX + DIAL_RADIUS * sin;
+      const y1 = centerY - DIAL_RADIUS * cos;
+      const x2 = centerX + (DIAL_RADIUS - tickLen) * sin;
+      const y2 = centerY - (DIAL_RADIUS - tickLen) * cos;
+
+      ticks.push({
+        val: w,
+        x1,
+        y1,
+        x2,
+        y2,
+        stroke,
+        strokeWidth,
+      });
+
+      if (isMajor) {
+        const textRadius = DIAL_RADIUS - 38;
+        const xText = centerX + textRadius * sin;
+        const yText = centerY - textRadius * cos;
+        const deg = (angle * 180) / Math.PI;
+
+        labels.push({
+          val: w,
+          x: xText,
+          y: yText,
+          deg,
+        });
+      }
+    }
+
+    return { dialTicks: ticks, dialLabels: labels };
+  }, [dialWeight, weightUnit, centerX, centerY, DIAL_RADIUS, ANGLE_PER_UNIT]);
+
+  // Step 4: Height
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
+  const [heightCm, setHeightCm] = useState<number>(175);
+  const [dialHeight, setDialHeight] = useState<number>(175);
+  const dialHeightRef = useRef<number>(175);
+  dialHeightRef.current = dialHeight;
+  const heightUnitRef = useRef<'cm' | 'ft'>('cm');
+  heightUnitRef.current = heightUnit;
+  const dragStartHeight = useRef<number>(175);
+  const lastHapticHeight = useRef<number>(175);
 
-  const autofillFields = () => {
-    setFirstName('Jane');
-    setLastName('Doe');
-    setPhone('+1 (555) 234-5678');
-    setGender('female');
-    setBirthdate(new Date(1998, 4, 15));
-    setWeight('65');
-    setHeight('170');
-    setFirstNameError(false);
-    setLastNameError(false);
-    setGenderError(false);
-    setWeightError(false);
-    setHeightError(false);
-    setGlobalError('');
+  const HEIGHT_SETTER_HEIGHT = 240;
+  const HEIGHT_CENTER_Y = HEIGHT_SETTER_HEIGHT / 2; // 120
+  const RULER_BASELINE_X = 36;
+
+  const handleToggleHeightUnit = (unit: 'cm' | 'ft') => {
+    if (unit === heightUnit) return;
+    triggerHaptic();
+    setHeightUnit(unit);
+    if (unit === 'ft') {
+      const totalInches = Math.round(heightCm / 2.54);
+      setDialHeight(totalInches);
+    } else {
+      setDialHeight(heightCm);
+    }
   };
 
-  useEffect(() => {
-    if (route?.params?.autofill) {
-      autofillFields();
-    }
-  }, [route?.params?.autofill]);
+  const heightPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 3;
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        dragStartHeight.current = dialHeightRef.current;
+        lastHapticHeight.current = Math.round(dialHeightRef.current);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const currentUnit = heightUnitRef.current;
+        const pixelsPerUnit = currentUnit === 'cm' ? 7.5 : 15;
+        const delta = -gestureState.dy / pixelsPerUnit;
+        const raw = dragStartHeight.current + delta;
+        const minVal = currentUnit === 'cm' ? 100 : 39;
+        const maxVal = currentUnit === 'cm' ? 240 : 95;
+        const clamped = Math.max(minVal, Math.min(maxVal, raw));
+        setDialHeight(clamped);
 
-  // Slide 5 loading state
-  const [isFinishing, setIsFinishing] = useState(false);
+        const rounded = Math.round(clamped);
+        if (rounded !== lastHapticHeight.current) {
+          lastHapticHeight.current = rounded;
+          try {
+            Haptics.selectionAsync();
+          } catch {}
+        }
+      },
+      onPanResponderRelease: () => {
+        const currentUnit = heightUnitRef.current;
+        const rounded = Math.round(dialHeightRef.current);
+        setDialHeight(rounded);
+        if (currentUnit === 'cm') {
+          setHeightCm(rounded);
+        } else {
+          setHeightCm(Math.round(rounded * 2.54));
+        }
+      },
+    })
+  ).current;
 
-  // Validation error states & shake animation trigger
-  const [firstNameError, setFirstNameError] = useState(false);
-  const [lastNameError, setLastNameError] = useState(false);
-  const [weightError, setWeightError] = useState(false);
-  const [heightError, setHeightError] = useState(false);
-  const [shakeTrigger, setShakeTrigger] = useState(0);
-  const [globalError, setGlobalError] = useState('');
+  const { heightTicks, heightLabels } = useMemo(() => {
+    const ticks: Array<{
+      val: number;
+      x1: number;
+      x2: number;
+      y: number;
+      stroke: string;
+      strokeWidth: number;
+    }> = [];
 
-  // Animation values for smooth screen transfer transitions
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
+    const labels: Array<{
+      val: number;
+      x: number;
+      y: number;
+      label: string;
+    }> = [];
 
-  // Continuous Progress Bar animated value (starts at 25% for Step 1 of 4)
-  const progressAnim = useRef(new Animated.Value(1 / 4)).current;
+    const isCm = heightUnit === 'cm';
+    const pixelsPerUnit = isCm ? 7.5 : 15;
+    const minVal = isCm ? 100 : 39;
+    const maxVal = isCm ? 240 : 95;
 
-  useEffect(() => {
-    if (currentStep <= 4) {
-      Animated.timing(progressAnim, {
-        toValue: currentStep / 4,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
-    }
-  }, [currentStep, progressAnim]);
+    const range = isCm ? 18 : 9;
+    const startH = Math.max(minVal, Math.floor(dialHeight - range));
+    const endH = Math.min(maxVal, Math.ceil(dialHeight + range));
 
-  // Transition helper for smooth slide & fade animation between screens
-  const transitionToStep = (nextStep: number, direction: 'forward' | 'backward') => {
-    // Clear transient validation errors when navigating
-    setFirstNameError(false);
-    setLastNameError(false);
-    setGenderError(false);
-    setWeightError(false);
-    setHeightError(false);
-    setGlobalError('');
+    for (let h = startH; h <= endH; h++) {
+      const y = HEIGHT_CENTER_Y - (h - dialHeight) * pixelsPerUnit;
+      if (y < -12 || y > HEIGHT_SETTER_HEIGHT + 12) continue;
 
-    const exitOffset = direction === 'forward' ? -40 : 40;
-    const enterOffset = direction === 'forward' ? 40 : -40;
+      let tickLen = 9;
+      let stroke = 'rgba(255, 255, 255, 0.35)';
+      let strokeWidth = 1.2;
+      let labelText: string | null = null;
 
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 130,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: exitOffset,
-        duration: 130,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCurrentStep(nextStep);
-      slideAnim.setValue(enterOffset);
-
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 220,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 220,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]).start();
-    });
-  };
-
-  // Next button handler with shake & error validation callback
-  const handleNext = () => {
-    if (currentStep === 1) {
-      const isFirstEmpty = !firstName.trim();
-      const isLastEmpty = !lastName.trim();
-
-      if (isFirstEmpty || isLastEmpty) {
-        setFirstNameError(isFirstEmpty);
-        setLastNameError(isLastEmpty);
-        setShakeTrigger((prev) => prev + 1);
-        setGlobalError('You need to input before proceeding next');
-        return;
+      if (isCm) {
+        if (h % 10 === 0) {
+          tickLen = 24;
+          stroke = '#FFFFFF';
+          strokeWidth = 2.2;
+          labelText = `${h}`;
+        } else if (h % 5 === 0) {
+          tickLen = 15;
+          stroke = 'rgba(255, 255, 255, 0.75)';
+          strokeWidth = 1.6;
+        }
+      } else {
+        if (h % 12 === 0) {
+          tickLen = 24;
+          stroke = '#FFFFFF';
+          strokeWidth = 2.2;
+          labelText = `${h / 12}′`;
+        } else if (h % 6 === 0) {
+          tickLen = 16;
+          stroke = 'rgba(255, 255, 255, 0.8)';
+          strokeWidth = 1.6;
+          labelText = `${Math.floor(h / 12)}′${h % 12}″`;
+        }
       }
 
-      setFirstNameError(false);
-      setLastNameError(false);
-      setGlobalError('');
+      ticks.push({
+        val: h,
+        x1: RULER_BASELINE_X - tickLen,
+        x2: RULER_BASELINE_X,
+        y,
+        stroke,
+        strokeWidth,
+      });
+
+      if (labelText) {
+        labels.push({
+          val: h,
+          x: RULER_BASELINE_X + 10,
+          y,
+          label: labelText,
+        });
+      }
     }
 
+    return { heightTicks: ticks, heightLabels: labels };
+  }, [dialHeight, heightUnit]);
+
+  // Drum wheel scroll references
+  const monthScrollRef = useRef<ScrollView>(null);
+  const dayScrollRef = useRef<ScrollView>(null);
+  const yearScrollRef = useRef<ScrollView>(null);
+
+  const YEARS = useMemo(() => {
+    const list: number[] = [];
+    for (let y = MIN_YEAR; y <= MAX_YEAR; y++) {
+      list.push(y);
+    }
+    return list;
+  }, []);
+
+  const daysCount = new Date(birthYear, birthMonth, 0).getDate();
+  const DAYS = useMemo(() => {
+    return Array.from({ length: daysCount }, (_, i) => i + 1);
+  }, [daysCount]);
+
+  // Adjust day if month switch makes selected day out of bounds
+  useEffect(() => {
+    if (birthDay > daysCount) {
+      setBirthDay(daysCount);
+      dayScrollRef.current?.scrollTo({ y: (daysCount - 1) * ITEM_HEIGHT, animated: true });
+    }
+  }, [daysCount, birthDay]);
+
+  // Scroll to selected positions when entering Step 2
+  useEffect(() => {
     if (currentStep === 2) {
-      if (!gender) {
-        setGenderError(true);
-        setShakeTrigger((prev) => prev + 1);
-        setGlobalError('Please select your gender before proceeding');
-        return;
-      }
-
-      setGenderError(false);
-      setGlobalError('');
+      const timer = setTimeout(() => {
+        monthScrollRef.current?.scrollTo({ y: (birthMonth - 1) * ITEM_HEIGHT, animated: false });
+        dayScrollRef.current?.scrollTo({ y: (birthDay - 1) * ITEM_HEIGHT, animated: false });
+        const yIndex = YEARS.indexOf(birthYear);
+        if (yIndex >= 0) {
+          yearScrollRef.current?.scrollTo({ y: yIndex * ITEM_HEIGHT, animated: false });
+        }
+      }, 50);
+      return () => clearTimeout(timer);
     }
+  }, [currentStep, YEARS]);
 
-    if (currentStep === 4) {
-      const isWeightEmpty = !weight.trim();
-      const isHeightEmpty = !height.trim();
+  const triggerHaptic = () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+  };
 
-      if (isWeightEmpty || isHeightEmpty) {
-        setWeightError(isWeightEmpty);
-        setHeightError(isHeightEmpty);
-        setShakeTrigger((prev) => prev + 1);
-        setGlobalError('You need to input before proceeding next');
-        return;
-      }
-
-      setWeightError(false);
-      setHeightError(false);
-      setGlobalError('');
-    }
-
-    if (currentStep < totalSteps) {
-      transitionToStep(currentStep + 1, 'forward');
+  const handleNext = async () => {
+    triggerHaptic();
+    if (currentStep < 4) {
+      setCurrentStep((prev) => prev + 1);
+    } else {
+      await handleCompleteSetup();
     }
   };
 
   const handleBack = () => {
-    setFirstNameError(false);
-    setLastNameError(false);
-    setGenderError(false);
-    setWeightError(false);
-    setHeightError(false);
-    setGlobalError('');
-
+    triggerHaptic();
     if (currentStep > 1) {
-      transitionToStep(currentStep - 1, 'backward');
+      setCurrentStep((prev) => prev - 1);
     } else {
-      navigation.goBack();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate('MainTabs', { screen: 'DashboardTab' });
+      }
     }
   };
 
-  const handleCompleteOnboarding = async () => {
-    setIsFinishing(true);
+  const handleDrumWheelScroll = (
+    e: NativeSyntheticEvent<NativeScrollEvent>,
+    type: 'month' | 'day' | 'year'
+  ) => {
+    const offsetY = e.nativeEvent.contentOffset.y;
+    const index = Math.max(0, Math.round(offsetY / ITEM_HEIGHT));
+
+    if (type === 'month') {
+      const mIdx = Math.min(MONTHS.length - 1, index);
+      if (mIdx + 1 !== birthMonth) {
+        setBirthMonth(mIdx + 1);
+        try {
+          Haptics.selectionAsync();
+        } catch {}
+      }
+    } else if (type === 'day') {
+      const dIdx = Math.min(daysCount - 1, index);
+      if (dIdx + 1 !== birthDay) {
+        setBirthDay(dIdx + 1);
+        try {
+          Haptics.selectionAsync();
+        } catch {}
+      }
+    } else if (type === 'year') {
+      const yIdx = Math.min(YEARS.length - 1, index);
+      if (YEARS[yIdx] && YEARS[yIdx] !== birthYear) {
+        setBirthYear(YEARS[yIdx]!);
+        try {
+          Haptics.selectionAsync();
+        } catch {}
+      }
+    }
+  };
+
+  const handleSelectDirect = (index: number, type: 'month' | 'day' | 'year') => {
+    try {
+      Haptics.selectionAsync();
+    } catch {}
+
+    if (type === 'month') {
+      setBirthMonth(index + 1);
+      monthScrollRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: true });
+    } else if (type === 'day') {
+      setBirthDay(index + 1);
+      dayScrollRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: true });
+    } else if (type === 'year') {
+      setBirthYear(YEARS[index]!);
+      yearScrollRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: true });
+    }
+  };
+
+  const handleCompleteSetup = async () => {
+    setIsSaving(true);
+    const birthdateFormatted = `${birthYear}-${String(birthMonth).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`;
 
     try {
-      const fullName = `${firstName.trim()} ${lastName.trim()}`;
-      try {
-        await apiClient.patch('/api/v1/member/profile', {
-          name: fullName,
-          phone: phone.trim(),
-        });
-      } catch (err) {
-        console.log('[Onboarding] Profile patch optional warning:', err);
+      let activeGoal = user?.fitness_goal || route?.params?.fitnessGoal || route?.params?.onboardingData?.fitnessGoal;
+      if (!activeGoal) {
+        try {
+          const db = await getDatabase();
+          const prefRow = await db.getFirstAsync<{ fitness_goal?: string | null }>(
+            `SELECT fitness_goal FROM Preferences WHERE id = 'default'`
+          );
+          if (prefRow?.fitness_goal) {
+            activeGoal = prefRow.fitness_goal;
+          }
+        } catch {}
       }
+      activeGoal = activeGoal || 'build_muscle';
+
+      // Calculate calorie target via Mifflin-St Jeor formula
+      const calorieResult = calculateDailyCalorieTarget({
+        weightKg,
+        heightCm,
+        gender,
+        birthYear,
+        birthdate: birthdateFormatted,
+        fitnessGoal: activeGoal,
+      });
+      const targetCalories = calorieResult.targetCalories;
+
+      // Update local Preferences in SQLite
+      try {
+        const db = await getDatabase();
+        await db.runAsync(
+          `INSERT OR IGNORE INTO Preferences (id, workout_type, intensity, weekly_workout_goal)
+           VALUES ('default', 'full-body', 'moderate', 5)`
+        );
+        await db.runAsync(
+          `UPDATE Preferences 
+           SET daily_nutrition_target_calories = ?, weight_kg = ?, fitness_goal = ?
+           WHERE id = 'default'`,
+          [targetCalories, weightKg, activeGoal]
+        );
+      } catch {}
+
+      // Enqueue sync & update remote preferences
+      try {
+        await repo.updatePreferences({
+          daily_nutrition_target_calories: targetCalories,
+          weight_kg: weightKg,
+          fitness_goal: activeGoal,
+        });
+      } catch {}
+
+      await updateUser({
+        gender,
+        birthdate: birthdateFormatted,
+        weight_kg: weightKg,
+        height_cm: heightCm,
+        is_profile_completed: true,
+        fitness_goal: activeGoal,
+      });
 
       try {
-        await apiClient.patch('/api/v1/member/preferences', {
-          workout_type: 'full-body',
-          intensity: 'moderate',
-          weekly_workout_goal: 3,
+        await repo.updateProfile({
+          gender,
+          birthdate: birthdateFormatted,
+          weight_kg: weightKg,
+          height_cm: heightCm,
+          is_profile_completed: true,
         });
-      } catch (err) {
-        console.log('[Onboarding] Preferences patch optional warning:', err);
-      }
+      } catch {}
 
-      const updatedUser = {
-        ...incomingUser,
-        name: fullName || 'GymFlow Member',
-        phone: phone.trim(),
-        gender: gender || 'male',
-      };
-
-      await setAuth(incomingToken, updatedUser, false);
-    } catch (error) {
-      console.error('[Onboarding] Error completing profile setup:', error);
-      await setAuth(incomingToken, incomingUser, false);
+      navigation.navigate('MainTabs', {
+        screen: 'DashboardTab',
+        params: {
+          profileSetupJustCompleted: true,
+          calculatedTargetCalories: targetCalories,
+        },
+      });
+    } catch {
+      navigation.navigate('MainTabs', {
+        screen: 'DashboardTab',
+        params: { profileSetupJustCompleted: true },
+      });
     } finally {
-      setIsFinishing(false);
+      setIsSaving(false);
     }
-  };
-
-  const calculateAge = (date: Date) => {
-    const ageDiffMs = Date.now() - date.getTime();
-    const ageDate = new Date(ageDiffMs);
-    return Math.abs(ageDate.getUTCFullYear() - 1970);
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {/* Header with Back button, Step Progress Bars, and Counter */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={handleBack}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <ArrowLeft size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <View style={styles.progressTrackContainer}>
+          {[1, 2, 3, 4].map((step) => (
+            <View
+              key={step}
+              style={[
+                styles.progressBarSegment,
+                step <= currentStep && styles.progressBarSegmentActive,
+              ]}
+            />
+          ))}
+        </View>
+
+        <View style={styles.stepBadge}>
+          <Text style={styles.stepBadgeText}>STEP {currentStep} OF 4</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Top Header & Continuous Progress Bar */}
-        {currentStep < 5 && (
-          <View style={styles.topSection}>
-            <View style={styles.topBar}>
-              <TouchableOpacity
-                onPress={handleBack}
-                style={styles.backButton}
-                accessibilityLabel="Go Back"
-              >
-                <ArrowLeft size={20} color={colors.text} />
-              </TouchableOpacity>
-
-              <Text style={styles.stepText}>
-                Step {currentStep} of 4
-              </Text>
-
-              <TouchableOpacity
-                onPress={autofillFields}
-                style={styles.devAutofillPill}
-                activeOpacity={0.7}
-                accessibilityLabel="Autofill Dev Profile"
-              >
-                <Zap size={11} color={colors.primary} style={{ marginRight: 4 }} />
-                <Text style={styles.devAutofillPillText}>Autofill</Text>
-              </TouchableOpacity>
+        {/* STEP 1: GENDER */}
+        {currentStep === 1 && (
+          <View style={styles.stepSection}>
+            <View style={styles.centeredTitleGroup}>
+              <Text style={styles.centeredStepTitle}>What is your gender?</Text>
             </View>
 
-            {/* Continuous Progress Bar Track */}
-            <View style={styles.progressBarTrack}>
-              <Animated.View
+            <View style={styles.optionsList}>
+              {[
+                {
+                  id: 'male' as const,
+                  title: 'Male',
+                  subtitle: 'Calculates male basal metabolic benchmark',
+                  icon: User,
+                },
+                {
+                  id: 'female' as const,
+                  title: 'Female',
+                  subtitle: 'Calculates female basal metabolic benchmark',
+                  icon: User,
+                },
+                {
+                  id: 'prefer_not_to_say' as const,
+                  title: 'Prefer Not to Say',
+                  subtitle: 'Uses standardized athletic baseline metrics',
+                  icon: Shield,
+                },
+              ].map((opt) => {
+                const isSelected = gender === opt.id;
+                const IconComponent = opt.icon;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                    onPress={() => {
+                      triggerHaptic();
+                      setGender(opt.id);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={opt.title}
+                  >
+                    <View style={[styles.optionIconBox, isSelected && styles.optionIconBoxSelected]}>
+                      <IconComponent size={22} color={isSelected ? '#000000' : '#FFFFFF'} />
+                    </View>
+                    <View style={styles.optionContent}>
+                      <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
+                        {opt.title}
+                      </Text>
+                      <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
+                    </View>
+                    <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
+                      {isSelected && <Check size={14} color="#000000" strokeWidth={3} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* STEP 2: BIRTHDATE - APPLE 3-COLUMN SCROLL WHEEL */}
+        {currentStep === 2 && (
+          <View style={styles.stepSection}>
+            <View style={styles.centeredTitleGroup}>
+              <Text style={styles.centeredStepTitle}>
+                Select your{'\n'}date of birth
+              </Text>
+            </View>
+
+            {/* Apple 3-Column Drum Wheel Container */}
+            <View style={[styles.drumWheelContainer, { height: CONTAINER_HEIGHT }]}>
+              {/* Center Active Row Selection Highlight Bar */}
+              <View
                 style={[
-                  styles.progressBarFill,
-                  {
-                    width: progressAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['0%', '100%'],
-                    }),
-                  },
+                  styles.drumWheelHighlightBar,
+                  { top: PADDING_VERTICAL, height: ITEM_HEIGHT },
                 ]}
+                pointerEvents="none"
+              />
+
+              {/* Column 1: Month */}
+              <ScrollView
+                ref={monthScrollRef}
+                style={styles.wheelColumnMonth}
+                contentContainerStyle={{ paddingVertical: PADDING_VERTICAL }}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={ITEM_HEIGHT}
+                snapToAlignment="center"
+                decelerationRate="fast"
+                nestedScrollEnabled={true}
+                scrollEventThrottle={16}
+                onScroll={(e) => handleDrumWheelScroll(e, 'month')}
+                onMomentumScrollEnd={(e) => handleDrumWheelScroll(e, 'month')}
+                onScrollEndDrag={(e) => handleDrumWheelScroll(e, 'month')}
+              >
+                {MONTHS.map((m, idx) => {
+                  const dist = Math.abs(idx - (birthMonth - 1));
+                  const isSelected = dist === 0;
+                  const isLongMonth = m.length >= 8; // September, November, December, February
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      style={[styles.wheelItem, { height: ITEM_HEIGHT }]}
+                      onPress={() => handleSelectDirect(idx, 'month')}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.wheelItemText,
+                          styles.wheelItemTextMonth,
+                          isLongMonth && styles.wheelItemTextMonthLong,
+                          isSelected && styles.wheelItemTextSelected,
+                          isSelected && isLongMonth && styles.wheelItemTextSelectedLongMonth,
+                          dist === 1 && styles.wheelItemTextDist1,
+                          dist === 2 && styles.wheelItemTextDist2,
+                          dist >= 3 && styles.wheelItemTextDist3,
+                        ]}
+                      >
+                        {m}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Column 2: Day */}
+              <ScrollView
+                ref={dayScrollRef}
+                style={styles.wheelColumnDay}
+                contentContainerStyle={{ paddingVertical: PADDING_VERTICAL }}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={ITEM_HEIGHT}
+                snapToAlignment="center"
+                decelerationRate="fast"
+                nestedScrollEnabled={true}
+                scrollEventThrottle={16}
+                onScroll={(e) => handleDrumWheelScroll(e, 'day')}
+                onMomentumScrollEnd={(e) => handleDrumWheelScroll(e, 'day')}
+                onScrollEndDrag={(e) => handleDrumWheelScroll(e, 'day')}
+              >
+                {DAYS.map((d, idx) => {
+                  const dist = Math.abs(idx - (birthDay - 1));
+                  const isSelected = dist === 0;
+                  return (
+                    <TouchableOpacity
+                      key={d}
+                      style={[styles.wheelItem, { height: ITEM_HEIGHT }]}
+                      onPress={() => handleSelectDirect(idx, 'day')}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.wheelItemText,
+                          styles.wheelItemTextDay,
+                          isSelected && styles.wheelItemTextSelected,
+                          dist === 1 && styles.wheelItemTextDist1,
+                          dist === 2 && styles.wheelItemTextDist2,
+                          dist >= 3 && styles.wheelItemTextDist3,
+                        ]}
+                      >
+                        {d}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Column 3: Year */}
+              <ScrollView
+                ref={yearScrollRef}
+                style={styles.wheelColumnYear}
+                contentContainerStyle={{ paddingVertical: PADDING_VERTICAL }}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={ITEM_HEIGHT}
+                snapToAlignment="center"
+                decelerationRate="fast"
+                nestedScrollEnabled={true}
+                scrollEventThrottle={16}
+                onScroll={(e) => handleDrumWheelScroll(e, 'year')}
+                onMomentumScrollEnd={(e) => handleDrumWheelScroll(e, 'year')}
+                onScrollEndDrag={(e) => handleDrumWheelScroll(e, 'year')}
+              >
+                {YEARS.map((y, idx) => {
+                  const selectedYearIdx = YEARS.indexOf(birthYear);
+                  const dist = Math.abs(idx - selectedYearIdx);
+                  const isSelected = dist === 0;
+                  return (
+                    <TouchableOpacity
+                      key={y}
+                      style={[styles.wheelItem, { height: ITEM_HEIGHT }]}
+                      onPress={() => handleSelectDirect(idx, 'year')}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.wheelItemText,
+                          styles.wheelItemTextYear,
+                          isSelected && styles.wheelItemTextSelected,
+                          dist === 1 && styles.wheelItemTextDist1,
+                          dist === 2 && styles.wheelItemTextDist2,
+                          dist >= 3 && styles.wheelItemTextDist3,
+                        ]}
+                      >
+                        {y}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Gradient fade masks at top and bottom */}
+              <LinearGradient
+                colors={['#0A0A0A', 'rgba(10, 10, 10, 0)']}
+                style={styles.wheelGradientTop}
+                pointerEvents="none"
+              />
+              <LinearGradient
+                colors={['rgba(10, 10, 10, 0)', '#0A0A0A']}
+                style={styles.wheelGradientBottom}
+                pointerEvents="none"
               />
             </View>
           </View>
         )}
 
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            currentStep === 5 && styles.welcomeScrollContent,
-          ]}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Animated step transition container */}
-          <Animated.View
-            style={[
-              styles.stepAnimatedWrapper,
-              currentStep === 5 && { flex: 1 },
-              {
-                opacity: fadeAnim,
-                transform: [{ translateX: slideAnim }],
-              },
-            ]}
-          >
-            {/* ============================================================ */}
-            {/* SLIDE 1: First Name, Last Name, Contact Number               */}
-            {/* (No container boxes, no icons, no placeholders)              */}
-            {/* ============================================================ */}
-            {currentStep === 1 && (
-              <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>What&apos;s your name?</Text>
-                  <Text style={styles.subtitle}>
-                    Enter your personal details to set up your member profile.
-                  </Text>
-                </View>
+        {/* STEP 3: WEIGHT */}
+        {currentStep === 3 && (
+          <View style={styles.stepSection}>
+            <View style={styles.centeredTitleGroup}>
+              <Text style={styles.centeredStepTitle}>What is your weight?</Text>
+            </View>
 
-                {/* Outlined Floating Label Inputs with Border Radius */}
-                <View style={styles.fieldsContainer}>
-                  <FloatingLabelInput
-                    label="First Name"
-                    value={firstName}
-                    onChangeText={(text) => {
-                      setFirstName(text);
-                      if (firstNameError) setFirstNameError(false);
-                      if (globalError) setGlobalError('');
-                    }}
-                    hasError={firstNameError}
-                    errorMessage="You need to input before proceeding next"
-                    shakeTrigger={shakeTrigger}
-                    autoCapitalize="words"
-                    autoFocus={true}
-                  />
+            {/* Unit Toggle: kg vs lbs */}
+            <View style={styles.unitToggleContainer}>
+              <TouchableOpacity
+                style={[styles.unitToggleTab, weightUnit === 'kg' && styles.unitToggleTabActive]}
+                onPress={() => handleToggleWeightUnit('kg')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.unitToggleText, weightUnit === 'kg' && styles.unitToggleTextActive]}>
+                  Kilograms (kg)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.unitToggleTab, weightUnit === 'lbs' && styles.unitToggleTabActive]}
+                onPress={() => handleToggleWeightUnit('lbs')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.unitToggleText, weightUnit === 'lbs' && styles.unitToggleTextActive]}>
+                  Pounds (lbs)
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-                  <FloatingLabelInput
-                    label="Last Name"
-                    value={lastName}
-                    onChangeText={(text) => {
-                      setLastName(text);
-                      if (lastNameError) setLastNameError(false);
-                      if (globalError) setGlobalError('');
-                    }}
-                    hasError={lastNameError}
-                    errorMessage="You need to input before proceeding next"
-                    shakeTrigger={shakeTrigger}
-                    autoCapitalize="words"
-                  />
-
-                  <FloatingLabelInput
-                    label="Contact Number"
-                    value={phone}
-                    onChangeText={(text) => {
-                      setPhone(text);
-                      if (globalError) setGlobalError('');
-                    }}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* ============================================================ */}
-            {/* SLIDE 2: Gender Selection                                    */}
-            {/* ============================================================ */}
-            {currentStep === 2 && (
-              <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>Select your gender</Text>
-                  <Text style={styles.subtitle}>
-                    Helps us calibrate your baseline metabolic rate and training benchmarks.
-                  </Text>
-                </View>
-
-                <View style={styles.optionsStack}>
-                  {[
-                    {
-                      id: 'male' as const,
-                      title: 'Male',
-                      desc: 'Calibrates basal metabolic rate and strength progression benchmarks.',
-                    },
-                    {
-                      id: 'female' as const,
-                      title: 'Female',
-                      desc: 'Calibrates energy expenditure and target heart rate zone benchmarks.',
-                    },
-                    {
-                      id: 'other' as const,
-                      title: 'Prefer not to say',
-                      desc: 'Applies balanced, non-gendered fitness algorithms.',
-                    },
-                  ].map((item) => {
-                    const isSelected = gender === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.selectableCard,
-                          isSelected && styles.selectableCardActive,
-                          genderError && !gender && styles.selectableCardError,
-                        ]}
-                        onPress={() => {
-                          setGender(item.id);
-                          setGenderError(false);
-                          setGlobalError('');
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                          <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                            {item.title}
-                          </Text>
-                          <Text style={styles.optionDescText}>{item.desc}</Text>
-                        </View>
-
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                          {isSelected && <View style={styles.radioInner} />}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
-            {/* ============================================================ */}
-            {/* SLIDE 3: Birthdate Calendar Picker                           */}
-            {/* ============================================================ */}
-            {currentStep === 3 && (
-              <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>When were you born?</Text>
-                  <Text style={styles.subtitle}>
-                    Used to calculate heart rate zones and caloric expenditure.
-                  </Text>
-                </View>
-
-                {/* Birthdate preview directly on background */}
-                <View style={styles.birthdateSummary}>
-                  <Text style={styles.birthdateValue}>
-                    {birthdate.toLocaleDateString('en-US', {
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </Text>
-                  <Text style={styles.birthdateAge}>
-                    {calculateAge(birthdate)} years old
-                  </Text>
-                </View>
-
-                {/* Calendar Picker laid directly on main background */}
-                <CalendarPicker
-                  selectedDate={birthdate}
-                  onSelectDate={setBirthdate}
-                  maxDate={new Date()}
-                  style={styles.flatCalendar}
-                />
-              </View>
-            )}
-
-            {/* ============================================================ */}
-            {/* SLIDE 4: Weight and Height Input                             */}
-            {/* (Laid directly on main background, no icons/placeholders)     */}
-            {/* ============================================================ */}
-            {currentStep === 4 && (
-              <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>Your body measurements</Text>
-                  <Text style={styles.subtitle}>
-                    Help us accurately benchmark your workout intensities.
-                  </Text>
-                </View>
-
-                <View style={styles.fieldsContainer}>
-                  {/* Weight Field */}
-                  <FloatingLabelInput
-                    label="Weight"
-                    value={weight}
-                    onChangeText={(text) => {
-                      setWeight(text);
-                      if (weightError) setWeightError(false);
-                      if (globalError) setGlobalError('');
-                    }}
-                    hasError={weightError}
-                    errorMessage="You need to input before proceeding next"
-                    shakeTrigger={shakeTrigger}
-                    keyboardType="numeric"
-                    autoFocus={true}
-                    suffix={
-                      <View style={styles.unitToggle}>
-                        <TouchableOpacity
-                          style={[styles.unitChip, weightUnit === 'kg' && styles.unitChipActive]}
-                          onPress={() => setWeightUnit('kg')}
-                        >
-                          <Text style={[styles.unitChipText, weightUnit === 'kg' && styles.unitChipTextActive]}>
-                            KG
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.unitChip, weightUnit === 'lbs' && styles.unitChipActive]}
-                          onPress={() => setWeightUnit('lbs')}
-                        >
-                          <Text style={[styles.unitChipText, weightUnit === 'lbs' && styles.unitChipTextActive]}>
-                            LBS
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    }
-                  />
-
-                  {/* Height Field */}
-                  <FloatingLabelInput
-                    label="Height"
-                    value={height}
-                    onChangeText={(text) => {
-                      setHeight(text);
-                      if (heightError) setHeightError(false);
-                      if (globalError) setGlobalError('');
-                    }}
-                    hasError={heightError}
-                    errorMessage="You need to input before proceeding next"
-                    shakeTrigger={shakeTrigger}
-                    keyboardType="numeric"
-                    suffix={
-                      <View style={styles.unitToggle}>
-                        <TouchableOpacity
-                          style={[styles.unitChip, heightUnit === 'cm' && styles.unitChipActive]}
-                          onPress={() => setHeightUnit('cm')}
-                        >
-                          <Text style={[styles.unitChipText, heightUnit === 'cm' && styles.unitChipTextActive]}>
-                            CM
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.unitChip, heightUnit === 'ft' && styles.unitChipActive]}
-                          onPress={() => setHeightUnit('ft')}
-                        >
-                          <Text style={[styles.unitChipText, heightUnit === 'ft' && styles.unitChipTextActive]}>
-                            FT
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    }
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* ============================================================ */}
-            {/* SLIDE 5: Welcome Screen with Glassmorphism Sliding Button    */}
-            {/* ============================================================ */}
-            {currentStep === 5 && (
-              <View style={styles.welcomeContainer}>
-                {/* Super Seamless Eased Gradient: White at top, Deep Black at bottom */}
-                <LinearGradient
-                  colors={[
-                    '#FFFFFF',
-                    '#FFFFFF',
-                    '#F7F7F8',
-                    '#EAEAEF',
-                    '#D2D2D7',
-                    '#AEAEB2',
-                    '#7C7C80',
-                    '#48484A',
-                    '#2C2C2E',
-                    '#1C1C1E',
-                    '#0A0A0A',
-                    '#000000',
-                  ]}
-                  locations={[
-                    0.0,
-                    0.15,
-                    0.25,
-                    0.35,
-                    0.45,
-                    0.55,
-                    0.65,
-                    0.75,
-                    0.84,
-                    0.91,
-                    0.96,
-                    1.0,
-                  ]}
-                  start={{ x: 0.5, y: 0 }}
-                  end={{ x: 0.5, y: 1 }}
-                  style={StyleSheet.absoluteFill}
+            {/* Rainbow Shape Analog Weight Dial - No Background */}
+            <View style={[styles.dialCardContainer, { width: windowWidth }]} {...panResponder.panHandlers}>
+              <Svg width={dialCardWidth} height={DIAL_HEIGHT} style={StyleSheet.absoluteFill}>
+                {/* Rainbow Arch Track - White */}
+                <Path
+                  d={rainbowArcPath}
+                  fill="none"
+                  stroke="#FFFFFF"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  opacity={0.65}
                 />
 
-                <View style={styles.welcomeContent}>
-                  {/* Top Wordmark replacing logo */}
-                  <View style={styles.welcomeBrandRow}>
-                    <Image
-                      source={require('../../../assets/gymflow-wordmark.png')}
-                      style={styles.welcomeWordmark}
-                      tintColor="#0A0A0A"
-                      resizeMode="contain"
-                    />
-                  </View>
+                {/* Inner Rainbow Guide Line - White */}
+                <Path
+                  d={innerRainbowPath}
+                  fill="none"
+                  stroke="#FFFFFF"
+                  strokeWidth={1}
+                  strokeDasharray="4,4"
+                  opacity={0.3}
+                />
 
-                  {/* Motivational Gym App Quote */}
-                  <View style={styles.quoteBlock}>
-                    <Text style={styles.welcomeHeading}>
-                      Transform your body.{'\n'}
-                      Elevate your mind.
-                    </Text>
+                {/* Tick marks radiating along the rainbow arch */}
+                {dialTicks.map((t) => (
+                  <Line
+                    key={`tick-${t.val}`}
+                    x1={t.x1}
+                    y1={t.y1}
+                    x2={t.x2}
+                    y2={t.y2}
+                    stroke={t.stroke}
+                    strokeWidth={t.strokeWidth}
+                    strokeLinecap="round"
+                  />
+                ))}
 
-                    <Text style={styles.welcomeSubheading}>
-                      Consistency is where champions are forged. Step forward, put in the work, and unleash your ultimate potential.
-                    </Text>
-                  </View>
+                {/* Major numbers rotated along the rainbow curve */}
+                {dialLabels.map((lbl) => (
+                  <SvgText
+                    key={`lbl-${lbl.val}`}
+                    x={lbl.x}
+                    y={lbl.y}
+                    transform={`rotate(${lbl.deg.toFixed(1)}, ${lbl.x.toFixed(1)}, ${lbl.y.toFixed(1)})`}
+                    textAnchor="middle"
+                    alignmentBaseline="middle"
+                    fontSize={14}
+                    fontWeight="700"
+                    fill="#FFFFFF"
+                  >
+                    {lbl.val}
+                  </SvgText>
+                ))}
 
-                  {/* Spacer to push slider to bottom black area */}
-                  <View style={{ flex: 1 }} />
+                {/* Fixed center green indicator line at the crest of the rainbow arch */}
+                <Line
+                  x1={centerX}
+                  y1={ARC_TOP}
+                  x2={centerX}
+                  y2={ARC_TOP + 28}
+                  stroke="#10B981"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                />
 
-                  {/* Glassmorphism Sliding Button on Solid Black Background */}
-                  <View style={styles.sliderWrapper}>
-                    <Text style={styles.sliderInstruction}>
-                      Slide right to launch your experience
-                    </Text>
-                    <GlassmorphismSlider
-                      label="Slide to Get Started"
-                      completedLabel="Entering GymFlow..."
-                      isLoading={isFinishing}
-                      onComplete={handleCompleteOnboarding}
-                    />
-                  </View>
-                </View>
+                {/* Fixed green indicator pointer (▲) pointing up at the readout bubble */}
+                <Polygon
+                  points={`${centerX},${ARC_TOP - 9} ${centerX - 6},${ARC_TOP - 1} ${centerX + 6},${ARC_TOP - 1}`}
+                  fill="#10B981"
+                />
+              </Svg>
+
+              {/* Floating Readout Bubble at top center */}
+              <View style={styles.readoutBubble} pointerEvents="none">
+                <Text style={styles.readoutBubbleNumber}>{Math.round(dialWeight)}</Text>
+                <Text style={styles.readoutBubbleUnit}>{weightUnit}</Text>
               </View>
-            )}
-          </Animated.View>
-        </ScrollView>
-
-        {/* Bottom Navigation Bar (Steps 1 to 4) */}
-        {currentStep < 5 && (
-          <View style={styles.bottomBar}>
-            {/* Global Error Banner Callback */}
-            {globalError ? (
-              <View style={styles.globalErrorBanner}>
-                <AlertCircle size={15} color={colors.error} style={{ marginRight: 6 }} />
-                <Text style={styles.globalErrorText}>{globalError}</Text>
-              </View>
-            ) : null}
-
-            <TouchableOpacity
-              style={styles.continueBtn}
-              onPress={handleNext}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.continueBtnText}>
-                Next
-              </Text>
-              <ArrowRight size={20} color={colors.textInverse} style={{ marginLeft: 8 }} />
-            </TouchableOpacity>
+            </View>
           </View>
         )}
-      </KeyboardAvoidingView>
+
+        {/* STEP 4: HEIGHT */}
+        {currentStep === 4 && (
+          <View style={styles.stepSection}>
+            <View style={styles.centeredTitleGroup}>
+              <Text style={styles.centeredStepTitle}>What is your height?</Text>
+            </View>
+
+            {/* Unit Toggle: cm vs ft */}
+            <View style={styles.unitToggleContainer}>
+              <TouchableOpacity
+                style={[styles.unitToggleTab, heightUnit === 'cm' && styles.unitToggleTabActive]}
+                onPress={() => handleToggleHeightUnit('cm')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.unitToggleText, heightUnit === 'cm' && styles.unitToggleTextActive]}>
+                  Centimeters (cm)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.unitToggleTab, heightUnit === 'ft' && styles.unitToggleTabActive]}
+                onPress={() => handleToggleHeightUnit('ft')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.unitToggleText, heightUnit === 'ft' && styles.unitToggleTextActive]}>
+                  Feet & Inches (ft/in)
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Vertical Height Setter */}
+            <View style={styles.verticalHeightSetterContainer} {...heightPanResponder.panHandlers}>
+              {/* Left Side: Hero Readout */}
+              <View style={styles.heightHeroContainer}>
+                <View style={styles.heightHeroRow}>
+                  {heightUnit === 'cm' ? (
+                    <>
+                      <Text style={styles.heightHeroNumber}>{Math.round(dialHeight)}</Text>
+                      <Text style={styles.heightHeroUnit}>cm</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.heightHeroNumber}>
+                      {Math.floor(dialHeight / 12)}′ {Math.round(dialHeight % 12)}″
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Right Side: Vertical Stadiometer Ruler */}
+              <View style={styles.verticalRulerArea}>
+                <Svg width={130} height={HEIGHT_SETTER_HEIGHT} style={StyleSheet.absoluteFill}>
+                  {/* Vertical Baseline */}
+                  <Line
+                    x1={RULER_BASELINE_X}
+                    y1={0}
+                    x2={RULER_BASELINE_X}
+                    y2={HEIGHT_SETTER_HEIGHT}
+                    stroke="rgba(255, 255, 255, 0.2)"
+                    strokeWidth={1.5}
+                  />
+
+                  {/* Ticks */}
+                  {heightTicks.map((t) => (
+                    <Line
+                      key={`htick-${t.val}`}
+                      x1={t.x1}
+                      y1={t.y}
+                      x2={t.x2}
+                      y2={t.y}
+                      stroke={t.stroke}
+                      strokeWidth={t.strokeWidth}
+                      strokeLinecap="round"
+                    />
+                  ))}
+
+                  {/* Labels */}
+                  {heightLabels.map((lbl) => (
+                    <SvgText
+                      key={`hlbl-${lbl.val}`}
+                      x={lbl.x}
+                      y={lbl.y}
+                      textAnchor="start"
+                      alignmentBaseline="middle"
+                      fontSize={13}
+                      fontWeight="700"
+                      fill="#FFFFFF"
+                    >
+                      {lbl.label}
+                    </SvgText>
+                  ))}
+
+                  {/* Horizontal Emerald Green Indicator Needle */}
+                  <Line
+                    x1={RULER_BASELINE_X - 32}
+                    y1={HEIGHT_CENTER_Y}
+                    x2={RULER_BASELINE_X}
+                    y2={HEIGHT_CENTER_Y}
+                    stroke="#10B981"
+                    strokeWidth={2.8}
+                    strokeLinecap="round"
+                  />
+
+                  {/* Green Pointer Arrow (▶) pointing at the ruler tick */}
+                  <Polygon
+                    points={`${RULER_BASELINE_X - 8},${HEIGHT_CENTER_Y - 5} ${RULER_BASELINE_X + 2},${HEIGHT_CENTER_Y} ${RULER_BASELINE_X - 8},${HEIGHT_CENTER_Y + 5}`}
+                    fill="#10B981"
+                  />
+                </Svg>
+
+                {/* Top and Bottom Gradient Fades */}
+                <LinearGradient
+                  colors={['#0A0A0A', 'rgba(10, 10, 10, 0)']}
+                  style={styles.rulerFadeTop}
+                  pointerEvents="none"
+                />
+                <LinearGradient
+                  colors={['rgba(10, 10, 10, 0)', '#0A0A0A']}
+                  style={styles.rulerFadeBottom}
+                  pointerEvents="none"
+                />
+              </View>
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Bottom CTA Button */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.primaryButton, isSaving && styles.primaryButtonDisabled]}
+          onPress={handleNext}
+          disabled={isSaving}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={currentStep === 4 ? 'Complete Profile Setup' : 'Continue to next step'}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#000000" />
+          ) : (
+            <View style={styles.buttonContent}>
+              <Text style={styles.primaryButtonText}>
+                {currentStep === 4 ? 'Complete Profile Setup' : 'Continue'}
+              </Text>
+              <ChevronRight size={18} color="#000000" strokeWidth={2.5} />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
 
+export default ProfileSetupScreen;
+
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#0A0A0A',
   },
-  keyboardView: {
-    flex: 1,
-  },
-  topSection: {
-    backgroundColor: colors.background,
-  },
-  topBar: {
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceElevated,
+    borderRadius: 20,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.headingSemiBold,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  devAutofillPill: {
+  progressTrackContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.full,
+    gap: 6,
+    marginHorizontal: 16,
+  },
+  progressBarSegment: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  progressBarSegmentActive: {
+    backgroundColor: '#FFD600',
+  },
+  stepBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  devAutofillPillText: {
-    color: colors.text,
+  stepBadgeText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
     fontSize: 11,
-    fontFamily: typography.fonts.headingBold,
-  },
-  // Continuous Smooth Progress Bar
-  progressBarTrack: {
-    width: '100%',
-    height: 4,
-    backgroundColor: colors.borderSubtle,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 2,
+    fontWeight: '700',
+    color: '#E5E5E5',
+    letterSpacing: 0.5,
   },
   scrollContent: {
-    flexGrow: 1,
-    padding: spacing.xl,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 32,
   },
-  welcomeScrollContent: {
-    padding: 0,
-    flexGrow: 1,
-  },
-  stepAnimatedWrapper: {
+  stepSection: {
     flex: 1,
   },
-  stepContainer: {
-    flex: 1,
-    paddingTop: spacing.md,
+  titleGroup: {
+    marginBottom: 28,
   },
-  headerBlock: {
-    marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: typography.sizes.xxl,
-    fontFamily: typography.fonts.headingBlack,
-    color: colors.text,
+  stepTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
     letterSpacing: -0.5,
-    marginBottom: spacing.xs,
+    marginBottom: 8,
   },
-  subtitle: {
-    fontSize: typography.sizes.sm,
-    fontFamily: typography.fonts.headingRegular,
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
-  // Flat inputs laid directly on main background
-  fieldsContainer: {
-    gap: 12,
-  },
-  fieldItem: {
-    marginBottom: spacing.xs,
-  },
-  fieldHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    fontFamily: typography.fonts.headingSemiBold,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  flatInput: {
-    fontSize: 16,
-    fontFamily: typography.fonts.headingRegular,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
-    minHeight: 52,
-    borderWidth: 1.2,
-    borderColor: '#D1D5DB',
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-  },
-  metricInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 52,
-    borderWidth: 1.2,
-    borderColor: '#D1D5DB',
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-  },
-  flatInputMetric: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: typography.fonts.headingSemiBold,
-    color: colors.text,
-    paddingVertical: 10,
-  },
-  metricSuffix: {
-    fontSize: typography.sizes.sm,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    marginLeft: spacing.sm,
-  },
-  unitToggle: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: borderRadius.sm,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  unitChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.xs,
-  },
-  unitChipActive: {
-    backgroundColor: colors.primary,
-  },
-  unitChipText: {
-    fontSize: 10,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textSecondary,
-  },
-  unitChipTextActive: {
-    color: colors.textInverse,
-  },
-  // Birthdate Display (Thin box with border radius)
-  birthdateSummary: {
-    marginBottom: spacing.lg,
-    padding: spacing.md,
-    borderWidth: 1.2,
-    borderColor: '#D1D5DB',
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-  },
-  birthdateValue: {
-    fontSize: typography.sizes.xl,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-  },
-  birthdateAge: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.headingSemiBold,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  flatCalendar: {
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    padding: 0,
-  },
-  // Selectable Options (Frequency & Goal)
-  optionsStack: {
-    gap: spacing.md,
-  },
-  selectableCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  selectableCardActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.surfaceElevated,
-  },
-  selectableCardError: {
-    borderColor: colors.error,
-  },
-  optionTitleText: {
-    fontSize: typography.sizes.base,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    marginBottom: 4,
-  },
-  optionTitleTextActive: {
-    color: colors.text,
-  },
-  optionDescText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.headingRegular,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  radioCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: borderRadius.full,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.md,
-  },
-  radioCircleActive: {
-    borderColor: colors.primary,
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
-  },
-  // Bottom Bar
-  bottomBar: {
-    padding: spacing.lg,
-    backgroundColor: colors.background,
-  },
-  globalErrorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FCA5A5',
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-  },
-  globalErrorText: {
-    color: colors.error,
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.headingSemiBold,
-  },
-  continueBtn: {
-    backgroundColor: colors.primary,
-    minHeight: 52,
-    borderRadius: borderRadius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  continueBtnDisabled: {
-    opacity: 0.35,
-  },
-  continueBtnText: {
-    fontSize: typography.sizes.base,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textInverse,
-  },
-  // Welcome Slide
-  welcomeContainer: {
-    flex: 1,
-    minHeight: 650,
-    position: 'relative',
-  },
-  welcomeContent: {
-    flex: 1,
-    padding: spacing.xl,
-    paddingBottom: spacing.xxl,
-    justifyContent: 'space-between',
-  },
-  welcomeBrandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  welcomeWordmark: {
-    width: 140,
-    height: 40,
-  },
-  quoteBlock: {
-    marginTop: spacing.xxl,
-  },
-  welcomeHeading: {
-    fontSize: 32,
-    fontFamily: typography.fonts.headingBlack,
-    color: '#0A0A0A',
-    lineHeight: 40,
-    letterSpacing: -0.5,
-  },
-  welcomeSubheading: {
+  stepSubtitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
     fontSize: 15,
-    fontFamily: typography.fonts.headingRegular,
-    color: '#525252',
-    marginTop: spacing.md,
+    fontWeight: '400',
+    color: '#A0A0A0',
     lineHeight: 22,
   },
-  sliderWrapper: {
-    marginTop: spacing.lg,
+  optionsList: {
+    gap: 12,
   },
-  sliderInstruction: {
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#141414',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    padding: 18,
+  },
+  optionCardSelected: {
+    borderColor: '#FFFFFF',
+    backgroundColor: '#1C1C1C',
+  },
+  optionIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#222222',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  optionIconBoxSelected: {
+    backgroundColor: '#FFFFFF',
+  },
+  optionContent: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  optionTitleSelected: {
+    color: '#FFFFFF',
+  },
+  optionSubtitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 13,
+    color: '#8A8A8A',
+  },
+  checkCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  checkCircleSelected: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+
+  // Centered Title for Step 2 (Matching reference image)
+  centeredTitleGroup: {
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 32,
+  },
+  centeredStepTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#FFFFFF',
     textAlign: 'center',
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.headingMedium,
-    color: 'rgba(255, 255, 255, 0.65)',
-    marginBottom: spacing.xs,
-    letterSpacing: 0.3,
+    letterSpacing: -0.6,
+    lineHeight: 38,
+  },
+
+  // 3-Column Drum Wheel Picker
+  drumWheelContainer: {
+    flexDirection: 'row',
+    position: 'relative',
+    marginHorizontal: 4,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  drumWheelHighlightBar: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    zIndex: 0,
+  },
+  wheelColumnMonth: {
+    flex: 1.5,
+    zIndex: 1,
+  },
+  wheelColumnDay: {
+    flex: 0.68,
+    zIndex: 1,
+  },
+  wheelColumnYear: {
+    flex: 1.05,
+    zIndex: 1,
+  },
+  wheelItem: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wheelItemText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 18,
+    color: '#CCCCCC',
+    fontWeight: '400',
+  },
+  wheelItemTextMonth: {
+    textAlign: 'right',
+    width: '100%',
+    paddingRight: 10,
+    letterSpacing: -0.2,
+  },
+  wheelItemTextMonthLong: {
+    fontSize: 16,
+  },
+  wheelItemTextDay: {
+    textAlign: 'center',
+    width: '100%',
+  },
+  wheelItemTextYear: {
+    textAlign: 'left',
+    width: '100%',
+    paddingLeft: 12,
+  },
+  wheelItemTextSelected: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    opacity: 1,
+  },
+  wheelItemTextSelectedLongMonth: {
+    fontSize: 17,
+  },
+  wheelItemTextDist1: {
+    color: '#E0E0E4',
+    fontSize: 19,
+    fontWeight: '500',
+    opacity: 0.88,
+  },
+  wheelItemTextDist2: {
+    color: '#AAAAAE',
+    fontSize: 17,
+    fontWeight: '400',
+    opacity: 0.7,
+  },
+  wheelItemTextDist3: {
+    color: '#77777B',
+    fontSize: 16,
+    fontWeight: '400',
+    opacity: 0.55,
+  },
+  wheelGradientTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+    zIndex: 10,
+  },
+  wheelGradientBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+    zIndex: 10,
+  },
+
+  // Steps 3 & 4
+  unitToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#161616',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+  },
+  unitToggleTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 9,
+  },
+  unitToggleTabActive: {
+    backgroundColor: '#282828',
+  },
+  unitToggleText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8A8A8A',
+  },
+  unitToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  dialCardContainer: {
+    width: '100%',
+    marginHorizontal: -24,
+    height: 195,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    position: 'relative',
+    marginBottom: 16,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  readoutBubble: {
+    position: 'absolute',
+    top: 6,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 10,
+  },
+  readoutBubbleNumber: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#000000',
+    letterSpacing: -0.5,
+  },
+  readoutBubbleUnit: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#52525B',
+    marginLeft: 4,
+  },
+  weightSecondaryContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  weightSecondaryText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#71717A',
+  },
+  verticalHeightSetterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 240,
+    backgroundColor: 'transparent',
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  heightHeroContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: 12,
+  },
+  heightHeroRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  heightHeroNumber: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 52,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+  },
+  heightHeroUnit: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  heightHeroSecondary: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#71717A',
+    marginTop: 6,
+  },
+  verticalRulerArea: {
+    width: 130,
+    height: 240,
+    position: 'relative',
+  },
+  rulerFadeTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 44,
+    zIndex: 5,
+  },
+  rulerFadeBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 44,
+    zIndex: 5,
+  },
+  summaryCard: {
+    backgroundColor: '#141414',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    marginTop: 8,
+  },
+  summaryRow: {
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 11,
+    color: '#777777',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+  },
+  summaryValue: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  summaryDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  footer: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: '#0A0A0A',
+  },
+  primaryButton: {
+    backgroundColor: '#FFD600',
+    borderRadius: 14,
+    height: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonDisabled: {
+    opacity: 0.7,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  primaryButtonText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000000',
   },
 });

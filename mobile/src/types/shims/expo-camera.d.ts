@@ -26,6 +26,7 @@ declare module 'expo-camera' {
     onBarcodeScanned?: (result: BarcodeScanningResult) => void;
     zoom?: number;
     flash?: 'on' | 'off' | 'auto';
+    enableTorch?: boolean;
   }
 
   export interface CameraPermissionResponse {

@@ -5,6 +5,11 @@ export interface User {
   email?: string;
   must_change_password?: boolean;
   gender?: string;
+  birthdate?: string;
+  weight_kg?: number;
+  height_cm?: number;
+  is_profile_completed?: boolean;
+  fitness_goal?: string;
 }
 
 export interface LoginResponse {
@@ -23,6 +28,9 @@ export interface Preferences {
   workout_type: string;
   intensity: string;
   weekly_workout_goal: number;
+  daily_nutrition_target_calories?: number;
+  weight_kg?: number;
+  fitness_goal?: string;
   updated_at?: string;
 }
 
@@ -33,6 +41,10 @@ export interface MemberProfile {
   phone: string;
   photo_url: string | null;
   gender?: string;
+  birthdate?: string;
+  weight_kg?: number;
+  height_cm?: number;
+  is_profile_completed?: boolean;
   must_change_password: boolean;
   membership: Membership;
   created_at: string;

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -9,6 +9,8 @@ import { colors } from '../theme';
 import { GymTabBar } from '../components/GymTabBar';
 import { GymFlowLogo, GymFlowWordmark } from '../components/GymFlowBrand';
 
+import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
+import { OnboardingScreen } from '../screens/auth/OnboardingScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { ForcedPasswordResetScreen } from '../screens/auth/ForcedPasswordResetScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
@@ -29,6 +31,7 @@ import { WorkoutSelectScreen } from '../screens/WorkoutSelectScreen';
 import { CustomWorkoutDetailScreen } from '../screens/CustomWorkoutDetailScreen';
 import { WorkoutHistoryScreen } from '../screens/WorkoutHistoryScreen';
 import { AiWorkoutGenerateScreen } from '../screens/AiWorkoutGenerateScreen';
+import { StreakScreen } from '../screens/StreakScreen';
 
 import type { RootStackParamList, AuthStackParamList, MainTabParamList } from './types';
 
@@ -39,12 +42,15 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const AuthNavigator: React.FC = () => {
   return (
     <AuthStack.Navigator
+      initialRouteName="Welcome"
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
         animation: 'fade',
       }}
     >
+      <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
+      <AuthStack.Screen name="Onboarding" component={OnboardingScreen} />
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
       <AuthStack.Screen name="ForcedPasswordReset" component={ForcedPasswordResetScreen} />
@@ -70,6 +76,18 @@ const MainTabNavigator: React.FC = () => {
   );
 };
 
+const navTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.background,
+    card: colors.surface,
+    text: colors.text,
+    border: colors.border,
+    primary: colors.primary,
+  },
+};
+
 export const RootNavigator: React.FC = () => {
   const { isAuthenticated, mustChangePassword, isLoading, checkAuth } = useAuthStore();
 
@@ -88,7 +106,7 @@ export const RootNavigator: React.FC = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navTheme}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -100,6 +118,11 @@ export const RootNavigator: React.FC = () => {
         ) : (
           <>
             <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+            <Stack.Screen
+              name="ProfileSetup"
+              component={ProfileSetupScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
             <Stack.Screen
               name="WorkoutDetail"
               component={WorkoutDetailScreen}
@@ -119,6 +142,7 @@ export const RootNavigator: React.FC = () => {
             <Stack.Screen name="CustomWorkoutDetailScreen" component={CustomWorkoutDetailScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="WorkoutHistoryScreen" component={WorkoutHistoryScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="AiWorkoutGenerateScreen" component={AiWorkoutGenerateScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="StreakScreen" component={StreakScreen} options={{ animation: 'slide_from_right' }} />
           </>
         )}
       </Stack.Navigator>

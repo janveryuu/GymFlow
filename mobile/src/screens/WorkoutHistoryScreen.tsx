@@ -95,7 +95,7 @@ export const WorkoutHistoryScreen: React.FC = () => {
         {/* Bottom Metrics Strip */}
         <View style={styles.statsStrip}>
           <View style={styles.statItem}>
-            <Clock size={13} color="#0A0A0A" />
+            <Clock size={13} color="#FFFFFF" />
             <Text style={styles.statText}>
               {formatDuration(item.duration_seconds)}
             </Text>
@@ -104,14 +104,14 @@ export const WorkoutHistoryScreen: React.FC = () => {
           <View style={styles.statDivider} />
 
           <View style={styles.statItem}>
-            <Flame size={13} color="#0A0A0A" />
+            <Flame size={13} color="#FFFFFF" />
             <Text style={styles.statText}>{item.calories_burned} kcal</Text>
           </View>
 
           <View style={styles.statDivider} />
 
           <View style={styles.statItem}>
-            <Sparkles size={13} color="#0A0A0A" />
+            <Sparkles size={13} color="#FFFFFF" />
             <Text style={styles.statText}>100% Target</Text>
           </View>
         </View>
@@ -130,7 +130,7 @@ export const WorkoutHistoryScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <ChevronLeft size={24} color="#0A0A0A" strokeWidth={2.5} />
+          <ChevronLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>Workout History</Text>
@@ -161,7 +161,7 @@ export const WorkoutHistoryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -169,9 +169,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F2',
+    borderBottomColor: colors.border,
   },
   backButton: {
     width: 38,
@@ -179,12 +179,12 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
   },
   headerTitle: {
     fontSize: 18,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -200,15 +200,15 @@ const styles = StyleSheet.create({
 
   /* History Card */
   historyCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 2,
   },
@@ -226,13 +226,13 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 12,
     fontFamily: typography.fonts.body,
-    color: '#8E8E8E',
+    color: colors.textSecondary,
   },
   completedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: 'rgba(48, 209, 88, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 2.5,
     borderRadius: 6,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   completedBadgeText: {
     fontSize: 10,
     fontFamily: typography.fonts.headingBold,
-    color: '#16A34A',
+    color: colors.success,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 12,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -265,21 +265,21 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 10,
     fontFamily: typography.fonts.headingBold,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     letterSpacing: 0.5,
     marginBottom: 1,
   },
   workoutTitle: {
     fontSize: 16,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     marginBottom: 2,
   },
   exercisesCountText: {
     fontSize: 12,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
   },
 
   /* Stats Strip */
@@ -287,12 +287,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
   },
   statItem: {
     flexDirection: 'row',
@@ -302,12 +302,12 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 12,
     fontFamily: typography.fonts.headingMedium,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '600',
   },
   statDivider: {
     width: 1,
     height: 14,
-    backgroundColor: '#EAEAED',
+    backgroundColor: colors.border,
   },
 });

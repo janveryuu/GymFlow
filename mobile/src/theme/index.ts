@@ -1,30 +1,31 @@
 /**
- * GymFlow Mobile Light-First Design System Tokens.
- * Based on clean white/off-white with strict black/white/grayscale elements.
+ * GymFlow Mobile Dark-First Design System Tokens.
+ * Based on deep black canvas (#000000) with dark charcoal surfaces,
+ * crisp white primary elements, and surgical contrast.
  */
 
 export const colors = {
   // Backgrounds
-  background: '#FAFAFA',
-  surface: '#FFFFFF',
-  surfaceElevated: '#F5F5F5',
-  surfaceHighlight: '#EFEFEF',
+  background: '#000000',
+  surface: '#121214',
+  surfaceElevated: '#1C1C1E',
+  surfaceHighlight: '#26262B',
 
   // Borders
-  border: '#E5E5E5',
-  borderSubtle: '#F0F0F0',
-  borderHighlight: '#D4D4D4',
+  border: '#26262B',
+  borderSubtle: '#1A1A1E',
+  borderHighlight: '#3F3F46',
 
-  // Accent & Brand (Monochrome black)
-  primary: '#0A0A0A',
-  primaryMuted: 'rgba(10, 10, 10, 0.15)',
-  primaryGlow: 'rgba(10, 10, 10, 0.25)',
+  // Accent & Brand (High contrast athletic white/black)
+  primary: '#FFFFFF',
+  primaryMuted: 'rgba(255, 255, 255, 0.15)',
+  primaryGlow: 'rgba(255, 255, 255, 0.25)',
 
   // Text
-  text: '#0A0A0A',
-  textSecondary: '#6B6B6B',
-  textMuted: '#8E8E8E',
-  textInverse: '#FFFFFF',
+  text: '#FFFFFF',
+  textSecondary: '#A1A1A6',
+  textMuted: '#71717A',
+  textInverse: '#000000',
 
   // Status & Semantic
   success: '#30D158',
@@ -33,25 +34,38 @@ export const colors = {
   error: '#FF453A',
   errorMuted: 'rgba(255, 69, 58, 0.15)',
   info: '#64D2FF',
+  cyan: '#00E5FF',
+  cyanMuted: 'rgba(0, 229, 255, 0.18)',
+  yellow: '#FFD600',
+  yellowMuted: 'rgba(255, 214, 0, 0.18)',
 } as const;
+
+import { Platform } from 'react-native';
+
+// Apple Company Typography: San Francisco (SF Pro Display / SF Pro Text)
+const appleFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", system-ui, sans-serif';
+
+const withFallback = (primaryFont: string): string => {
+  return Platform.OS === 'web' ? `${primaryFont}, "SF Pro Display", "SF Pro Text", ${appleFontStack}` : primaryFont;
+};
 
 export const typography = {
   fonts: {
-    headingBlack: 'SF-Pro-Display-Black',
-    headingBold: 'SF-Pro-Display-Bold',
-    headingSemiBold: 'SF-Pro-Display-Semibold',
-    headingMedium: 'SF-Pro-Display-Medium',
-    headingRegular: 'SF-Pro-Display-Regular',
-    body: 'SF-Pro-Text-Regular',
-    bodyBold: 'SF-Pro-Display-Bold',
-    bodySemiBold: 'SF-Pro-Display-Semibold',
-    bodyMedium: 'SF-Pro-Display-Medium',
+    headingBlack: withFallback('SF-Pro-Display-Black'),
+    headingBold: withFallback('SF-Pro-Display-Bold'),
+    headingSemiBold: withFallback('SF-Pro-Display-Semibold'),
+    headingMedium: withFallback('SF-Pro-Display-Medium'),
+    headingRegular: withFallback('SF-Pro-Display-Regular'),
+    body: withFallback('SF-Pro-Text-Regular'),
+    bodyBold: withFallback('SF-Pro-Display-Bold'),
+    bodySemiBold: withFallback('SF-Pro-Display-Semibold'),
+    bodyMedium: withFallback('SF-Pro-Display-Medium'),
   },
   fontFamily: {
-    headingBlack: 'SF-Pro-Display-Black',
-    headingBold: 'SF-Pro-Display-Bold',
-    heading: 'SF-Pro-Display-Bold',
-    body: 'SF-Pro-Text-Regular',
+    headingBlack: withFallback('SF-Pro-Display-Black'),
+    headingBold: withFallback('SF-Pro-Display-Bold'),
+    heading: withFallback('SF-Pro-Display-Bold'),
+    body: withFallback('SF-Pro-Text-Regular'),
   },
   sizes: {
     xs: 12,
@@ -100,14 +114,14 @@ export const shadows = {
     borderColor: colors.border,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 4,
   },
-  limeGlow: { // Kept name for compatibility, but it's now black glow
-    shadowColor: colors.primary,
+  limeGlow: {
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 6,
   },

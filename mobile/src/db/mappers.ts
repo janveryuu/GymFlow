@@ -175,6 +175,15 @@ export function rowToPreferences(row: any): Preferences {
     workout_type: String(row.workout_type),
     intensity: String(row.intensity),
     weekly_workout_goal: Number(row.weekly_workout_goal),
+    daily_nutrition_target_calories:
+      row.daily_nutrition_target_calories !== null && row.daily_nutrition_target_calories !== undefined
+        ? Number(row.daily_nutrition_target_calories)
+        : undefined,
+    weight_kg:
+      row.weight_kg !== null && row.weight_kg !== undefined
+        ? Number(row.weight_kg)
+        : undefined,
+    fitness_goal: row.fitness_goal ? String(row.fitness_goal) : undefined,
     updated_at: row.updated_at ? String(row.updated_at) : undefined,
   };
 }
@@ -185,6 +194,9 @@ export function preferencesToRow(pref: Preferences): Record<string, any> {
     workout_type: pref.workout_type,
     intensity: pref.intensity,
     weekly_workout_goal: pref.weekly_workout_goal,
+    daily_nutrition_target_calories: pref.daily_nutrition_target_calories ?? null,
+    weight_kg: pref.weight_kg ?? null,
+    fitness_goal: pref.fitness_goal ?? null,
   };
 }
 

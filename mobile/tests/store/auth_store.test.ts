@@ -71,4 +71,35 @@ describe('AuthStore', () => {
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(SECURE_STORE_TOKEN_KEY);
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(SECURE_STORE_USER_ID_KEY);
   });
+
+  it('updates user profile data and persists completion status', async () => {
+    const mockUser = {
+      id: 5,
+      name: 'Taylor Swift',
+      role: 'member' as const,
+      email: 'taylor@example.com',
+    };
+
+    await useAuthStore.getState().setAuth('mock_token_789', mockUser, false);
+    expect(useAuthStore.getState().user?.is_profile_completed).toBeUndefined();
+
+    await useAuthStore.getState().updateUser({
+      gender: 'female',
+      birthdate: '1998-12-13',
+      weight_kg: 58,
+      height_cm: 178,
+      is_profile_completed: true,
+    });
+
+    const state = useAuthStore.getState();
+    expect(state.user?.is_profile_completed).toBe(true);
+    expect(state.user?.gender).toBe('female');
+    expect(state.user?.weight_kg).toBe(58);
+    expect(state.user?.height_cm).toBe(178);
+
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+      'gymflow_profile_completed_5',
+      'true'
+    );
+  });
 });

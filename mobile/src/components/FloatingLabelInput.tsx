@@ -212,6 +212,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   labelText: {
+    fontFamily: typography.fonts.headingMedium,
     letterSpacing: 0.2,
   },
   textInput: {

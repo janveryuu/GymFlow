@@ -11,7 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -29,6 +29,7 @@ import {
   Camera,
   Edit2,
   Scale,
+  ChevronRight,
 } from 'lucide-react-native';
 import { colors, typography, borderRadius, spacing } from '../theme';
 import { useAuthStore } from '../store/authStore';
@@ -46,6 +47,7 @@ const profileSchema = z.object({
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 export const ProfileScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
   const { user, setAuth, token, logout } = useAuthStore();
   const repo = getSyncRepository();
 
@@ -273,6 +275,25 @@ export const ProfileScreen: React.FC = () => {
             </Text>
           </View>
         </View>
+
+        {/* Profile Setup Required Banner (if incomplete) */}
+        {!user?.is_profile_completed && (
+          <TouchableOpacity
+            style={styles.setupBanner}
+            onPress={() => navigation.navigate('ProfileSetup')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Complete Profile Setup"
+          >
+            <View style={styles.setupBannerContent}>
+              <Text style={styles.setupBannerTitle}>Complete Profile Setup</Text>
+              <Text style={styles.setupBannerSubtitle}>
+                Calibrate your gender, birthdate, weight, and height to unlock full tracking.
+              </Text>
+            </View>
+            <ChevronRight size={18} color="#000000" strokeWidth={2.5} />
+          </TouchableOpacity>
+        )}
 
         {/* Membership Details Card */}
         <View style={styles.card}>
@@ -877,6 +898,31 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.xs,
     color: colors.textMuted,
     letterSpacing: 0.3,
+  },
+  setupBanner: {
+    backgroundColor: '#FFD600',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
+  setupBannerContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  setupBannerTitle: {
+    fontFamily: typography.fonts.headingBold,
+    fontSize: typography.sizes.sm,
+    fontWeight: '800',
+    color: '#000000',
+    marginBottom: 2,
+  },
+  setupBannerSubtitle: {
+    fontFamily: typography.fonts.body,
+    fontSize: typography.sizes.xs,
+    color: 'rgba(0, 0, 0, 0.7)',
   },
 });
 

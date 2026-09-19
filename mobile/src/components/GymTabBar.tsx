@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
   },
   tabButtonActive: {
-    backgroundColor: colors.primary, // Surgical electric-lime rounded-square highlight
+    backgroundColor: '#FFD600',
   },
   iconWrapper: {
     position: 'relative',
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.text, // Circular black button
+    backgroundColor: '#FFD600',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

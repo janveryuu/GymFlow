@@ -25,6 +25,7 @@ import {
   ChevronRight,
   History,
 } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, borderRadius, spacing } from '../theme';
 import { WorkoutCardSkeleton } from '../components/SkeletonLoader';
 import { EmptyState } from '../components/EmptyState';
@@ -59,7 +60,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
 
   // Multi-select / edit mode state
   const [isSelectMode, setIsSelectMode] = useState(false);
-  const [selectedWorkoutIds, setSelectedWorkoutIds] = useState<string[]>(['1']); // default preselect for preview like reference
+  const [selectedWorkoutIds, setSelectedWorkoutIds] = useState<string[]>([]);
 
   // AI Generation indicator
   const [isGenerating, setIsGenerating] = useState(false);
@@ -87,11 +88,6 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
       setRawWorkouts(workoutsData);
       const merged = mergeWorkouts(workoutsData);
       setMergedList(merged);
-
-      // Preselect first workout if available for reference view
-      if (merged.length > 0 && merged[0]?.id && selectedWorkoutIds.length === 0) {
-        setSelectedWorkoutIds([merged[0].id]);
-      }
 
       if (profileData) {
         // If profile has height/weight stored
@@ -354,53 +350,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
 
   // AI Workout Generation Trigger
   const handleGenerateAiWorkout = () => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // Haptics optional
-    }
-    setIsGenerating(true);
-    setTimeout(() => {
-      setIsGenerating(false);
-      // Auto switch to personalized tab and append generated workout
-      setActiveTab('personalized');
-      const newAiWorkout: MergedWorkout = {
-        id: `ai-gen-${Date.now()}`,
-        title: 'Full-Body AI Hypertrophy',
-        slug: 'full-body-ai',
-        category: 'Personalized',
-        duration_minutes: 42,
-        calories: 340,
-        difficulty: 'intermediate',
-        equipment: 'Dumbbells & Bench',
-        sets: 4,
-        reps: 12,
-        sets_reps: '4 sets x 12 reps',
-        image_url: '',
-        description: 'AI Generated hypertrophy routine',
-        completion_percentage: 0,
-        is_favorite: false,
-        source: 'local',
-        primaryMuscle: 'Full Body',
-        secondaryMuscles: ['Chest', 'Back', 'Legs'],
-        exerciseType: 'strength',
-      };
-      setMergedList((prev) => [newAiWorkout, ...prev]);
-      Alert.alert(
-        'Workout Generated! ✨',
-        'Your custom AI-personalized workout is ready in the Personalized tab.',
-        [
-          {
-            text: 'View Workout',
-            onPress: () => {
-              addRecentId(newAiWorkout.id);
-              navigation.navigate('WorkoutDetail', { workoutId: newAiWorkout.id });
-            },
-          },
-          { text: 'OK' },
-        ]
-      );
-    }, 1200);
+    navigation.navigate('AiWorkoutGenerateScreen');
   };
 
   const handleSelectWorkout = (workout: MergedWorkout) => {
@@ -420,24 +370,30 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
     }
   };
 
-  // Filtered workouts based on Active Tab
+  // Filtered workouts based on Active Tab: strictly user-created routines
   const displayWorkouts = useMemo(() => {
     if (activeTab === 'personalized') {
-      const personalized = mergedList.filter(
+      return customWorkouts.filter(
         (w) =>
           w.category?.toLowerCase() === 'personalized' ||
+          w.id.startsWith('custom-ai-') ||
           w.id.startsWith('ai-') ||
-          w.slug.includes('ai')
+          w.slug.startsWith('ai-routine')
       );
-      return personalized;
     }
-    // 'custom' tab: display user's custom routines
-    return customWorkouts;
-  }, [mergedList, customWorkouts, activeTab]);
+    // 'custom' tab: display user's custom routines (non-AI)
+    return customWorkouts.filter(
+      (w) =>
+        !w.id.startsWith('custom-ai-') &&
+        !w.id.startsWith('ai-') &&
+        !w.slug.startsWith('ai-routine') &&
+        w.category?.toLowerCase() !== 'personalized'
+    );
+  }, [customWorkouts, activeTab]);
 
   // Render Workout Card matching reference layout
   const renderWorkoutCard = ({ item }: { item: MergedWorkout }) => {
-    const isSelected = selectedWorkoutIds.includes(item.id);
+    const isSelected = isSelectMode && selectedWorkoutIds.includes(item.id);
     const exerciseCount = item.sets || 4;
 
     return (
@@ -487,7 +443,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <ChevronLeft size={24} color="#0A0A0A" strokeWidth={2.5} />
+          <ChevronLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
         </TouchableOpacity>
 
         <Text style={styles.topHeaderTitle}>Workout</Text>
@@ -500,7 +456,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
           accessibilityRole="button"
           accessibilityLabel="Workout History"
         >
-          <History size={20} color="#0A0A0A" strokeWidth={2.2} />
+          <History size={20} color="#FFFFFF" strokeWidth={2.2} />
         </TouchableOpacity>
       </View>
 
@@ -669,7 +625,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
               >
                 <SquarePen
                   size={18}
-                  color={activeTab === 'custom' ? '#FFFFFF' : '#6B6B6B'}
+                  color={activeTab === 'custom' ? '#000000' : '#6B6B6B'}
                   style={styles.tabIcon}
                 />
                 <Text
@@ -692,7 +648,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
               >
                 <Sparkles
                   size={18}
-                  color={activeTab === 'personalized' ? '#FFFFFF' : '#6B6B6B'}
+                  color={activeTab === 'personalized' ? '#000000' : '#6B6B6B'}
                   style={styles.tabIcon}
                 />
                 <Text
@@ -728,14 +684,20 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
                 }
                 description={
                   activeTab === 'personalized'
-                    ? 'Tap "Generate" above to let AI craft an optimal hypertrophy routine for your body measurements.'
+                    ? 'Tap "Generate AI Routine" to let AI craft an optimal plan tailored to your body metrics.'
                     : 'You have no custom workout routines created yet.'
                 }
                 actionLabel={
-                  activeTab === 'personalized' ? 'Generate AI Routine' : undefined
+                  activeTab === 'personalized'
+                    ? 'Generate AI Routine'
+                    : 'Create Custom Workout'
                 }
+                actionBackgroundColor={colors.yellow}
+                actionTextColor="#000000"
                 onAction={
-                  activeTab === 'personalized' ? handleGenerateAiWorkout : undefined
+                  activeTab === 'personalized'
+                    ? handleGenerateAiWorkout
+                    : () => navigation.navigate('WorkoutSelectScreen')
                 }
               />
             </View>
@@ -964,7 +926,7 @@ export const CatalogScreen: React.FC<CatalogScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF', // Clean GymFlow white canvas
+    backgroundColor: colors.background,
   },
   topHeader: {
     flexDirection: 'row',
@@ -972,9 +934,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F2',
+    borderBottomColor: colors.border,
   },
   backButton: {
     width: 38,
@@ -982,12 +944,12 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
   },
   topHeaderTitle: {
     fontSize: 18,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -1000,7 +962,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -1020,10 +982,10 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     paddingVertical: 16,
     paddingHorizontal: 12,
     alignItems: 'center',
@@ -1040,14 +1002,14 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 11,
     fontFamily: typography.fonts.headingBold,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   metricValue: {
     fontSize: 28,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     marginTop: 4,
     marginBottom: 2,
     fontWeight: '800',
@@ -1055,14 +1017,14 @@ const styles = StyleSheet.create({
   bmiValue: {
     fontSize: 28,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     marginTop: 4,
     fontWeight: '800',
   },
   metricUnit: {
     fontSize: 12,
     fontFamily: typography.fonts.headingMedium,
-    color: '#8E8E8E',
+    color: colors.textMuted,
   },
 
   /* 2. BMI SLIDER */
@@ -1072,7 +1034,7 @@ const styles = StyleSheet.create({
   },
   sliderTrack: {
     height: 4,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: colors.border,
     borderRadius: 2,
     position: 'relative',
     justifyContent: 'center',
@@ -1083,7 +1045,7 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.yellow,
     borderRadius: 2,
   },
   sliderThumb: {
@@ -1091,14 +1053,14 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.yellow,
     top: -5,
     marginLeft: -7,
-    shadowColor: '#000000',
+    shadowColor: colors.yellow,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 4,
   },
   sliderLabelsRow: {
     flexDirection: 'row',
@@ -1108,20 +1070,20 @@ const styles = StyleSheet.create({
   categoryLabel: {
     fontSize: 11,
     fontFamily: typography.fonts.headingMedium,
-    color: '#8E8E93',
+    color: colors.textMuted,
   },
   categoryLabelActive: {
-    color: '#0A0A0A',
+    color: colors.yellow,
     fontFamily: typography.fonts.headingBold,
     fontWeight: '700',
   },
 
   /* 3. AI PERSONALIZED WORKOUT PROMPT */
   aiBannerCard: {
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1143,28 +1105,33 @@ const styles = StyleSheet.create({
   aiBannerTitle: {
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     marginBottom: 4,
   },
   aiBannerSubtitle: {
     fontSize: 12,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     lineHeight: 16,
   },
   generateButton: {
-    backgroundColor: '#0A0A0A', // Signature GymFlow jet black button
+    backgroundColor: colors.yellow,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.yellow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 3,
   },
   generateButtonText: {
     fontSize: 13,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: '#000000',
     fontWeight: '700',
   },
 
@@ -1178,7 +1145,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
@@ -1188,25 +1155,25 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modeToggleButton: {
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: colors.border,
   },
   modeToggleText: {
     fontSize: 13,
     fontFamily: typography.fonts.headingMedium,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '600',
   },
   deleteButton: {
-    backgroundColor: '#FFF1F0',
+    backgroundColor: 'rgba(255, 69, 58, 0.15)',
     padding: 7,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FFD6D6',
+    borderColor: 'rgba(255, 69, 58, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1229,12 +1196,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1.2,
-    borderColor: '#EAEAED',
-    backgroundColor: '#F7F7F8',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
   },
   tabButtonActive: {
-    backgroundColor: '#0A0A0A',
-    borderColor: '#0A0A0A',
+    backgroundColor: colors.yellow,
+    borderColor: colors.yellow,
+    shadowColor: colors.yellow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
   },
   tabIcon: {
     marginRight: 8,
@@ -1242,32 +1214,34 @@ const styles = StyleSheet.create({
   tabButtonText: {
     fontSize: 15,
     fontFamily: typography.fonts.headingSemiBold,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   tabButtonTextActive: {
-    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: typography.fonts.headingBold,
+    color: '#000000',
     fontWeight: '700',
   },
 
   /* 6. WORKOUT CARDS */
   workoutCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 2,
   },
   workoutCardSelected: {
-    borderColor: '#0A0A0A',
+    borderColor: colors.primary,
     borderWidth: 1.5,
   },
   checkbox: {
@@ -1275,21 +1249,21 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#D4D4D4',
-    backgroundColor: '#F7F7F8',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   checkboxChecked: {
-    backgroundColor: '#0A0A0A',
-    borderColor: '#0A0A0A',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   iconSquircle: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#0A0A0A', // Crisp black squircle
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -1300,14 +1274,14 @@ const styles = StyleSheet.create({
   workoutTitle: {
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     marginBottom: 3,
   },
   workoutMeta: {
     fontSize: 12,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
   },
 
   skeletonWrap: {
@@ -1323,7 +1297,7 @@ const styles = StyleSheet.create({
   /* MODAL STYLES */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -1331,14 +1305,14 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 20,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 8,
   },
@@ -1351,7 +1325,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
   },
   modalInputGroup: {
@@ -1360,46 +1334,51 @@ const styles = StyleSheet.create({
   modalInputLabel: {
     fontSize: 12,
     fontFamily: typography.fonts.headingMedium,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   modalTextInput: {
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#0A0A0A',
+    color: colors.text,
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
   },
   modalSaveButton: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.yellow,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
     marginTop: 8,
+    shadowColor: colors.yellow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   modalSaveButtonText: {
     fontSize: 14,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: '#000000',
     fontWeight: '700',
   },
   modalSubtitle: {
     fontSize: 12,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   choiceOptionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 14,
     marginBottom: 12,
   },
@@ -1407,7 +1386,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -1419,14 +1398,14 @@ const styles = StyleSheet.create({
   choiceTitle: {
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     marginBottom: 2,
   },
   choiceDesc: {
     fontSize: 12,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     lineHeight: 16,
   },
   categorySelectRow: {
@@ -1439,21 +1418,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
   },
   categorySelectPillActive: {
-    backgroundColor: '#0A0A0A',
-    borderColor: '#0A0A0A',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   categorySelectPillText: {
     fontSize: 12,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   categorySelectPillTextActive: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '700',
   },
   modalRowInputs: {

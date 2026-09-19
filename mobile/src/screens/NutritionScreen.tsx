@@ -1,13 +1,16 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  SafeAreaView, Alert, Modal, Pressable, TextInput, ActivityIndicator, Dimensions,
+  SafeAreaView, Alert, Modal, Pressable, TextInput, ActivityIndicator,
+  Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
-import { ArrowLeft, ScanBarcode, Camera, PenLine, Trash2 } from 'lucide-react-native';
-import Svg, { Rect, Text as SvgText } from 'react-native-svg';
+import { ArrowLeft, ScanBarcode, Camera, PenLine, Trash2, X, Lock, RotateCcw } from 'lucide-react-native';
 import { colors, typography, borderRadius } from '../theme';
 import { getDatabase } from '../db/connection';
+import { PercentRing } from '../components/PercentRing';
+import { useAuthStore } from '../store/authStore';
+import { calculateDailyCalorieTarget } from '../utils/nutritionCalculator';
 import * as Crypto from 'expo-crypto';
 
 // ---------------------------------------------------------------------------
@@ -42,14 +45,13 @@ interface NutritionEntry {
 
 interface DayTotal { date_key: string; total_calories: number; }
 
-const CHART_WIDTH  = Dimensions.get('window').width - 80;
-const CHART_HEIGHT = 80;
-
 const DEFAULT_TARGET = 2000;
 
 export const NutritionScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route       = useRoute<any>();
+  const user        = useAuthStore((state) => state.user);
+  const isProfileComplete = Boolean(user?.is_profile_completed);
 
   const [entries,        setEntries]        = useState<NutritionEntry[]>([]);
   const [weekHistory,    setWeekHistory]    = useState<DayTotal[]>([]);
@@ -69,44 +71,78 @@ export const NutritionScreen: React.FC = () => {
   const dateKey = localDateKey();
 
   const loadData = useCallback(async () => {
+    if (!isProfileComplete) {
+      setIsLoading(false);
+      return;
+    }
     try {
       const db = await getDatabase();
 
-      // Load target from preferences
-      const prefs = await db.getFirstAsync<{ daily_nutrition_target_calories: number | null }>(
-        'SELECT daily_nutrition_target_calories FROM Preferences WHERE id = ?', ['default']
-      );
-      if (prefs?.daily_nutrition_target_calories) setDailyTarget(prefs.daily_nutrition_target_calories);
+      // Ensure NutritionEntry table exists defensively
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS NutritionEntry (
+          id TEXT PRIMARY KEY NOT NULL,
+          food_name TEXT NOT NULL,
+          calories INTEGER NOT NULL,
+          protein_g REAL NOT NULL,
+          carbs_g REAL NOT NULL,
+          fat_g REAL NOT NULL,
+          serving_size TEXT,
+          meal_type TEXT NOT NULL,
+          source TEXT NOT NULL,
+          logged_at TEXT NOT NULL,
+          date_key TEXT NOT NULL,
+          barcode TEXT
+        );
+      `);
 
+      // Load target from preferences or calculate from profile
+      const prefs = await db.getFirstAsync<{ daily_nutrition_target_calories: number | null; fitness_goal?: string | null }>(
+        'SELECT daily_nutrition_target_calories, fitness_goal FROM Preferences WHERE id = ?', ['default']
+      );
+      if (prefs?.daily_nutrition_target_calories) {
+        setDailyTarget(prefs.daily_nutrition_target_calories);
+      } else if (user?.weight_kg && user?.height_cm) {
+        const calculated = calculateDailyCalorieTarget({
+          weightKg: user.weight_kg,
+          heightCm: user.height_cm,
+          gender: user.gender || 'male',
+          birthdate: user.birthdate,
+          fitnessGoal: user.fitness_goal || prefs?.fitness_goal || 'build_muscle',
+        });
+        setDailyTarget(calculated.targetCalories);
+        try {
+          await db.runAsync(
+            `UPDATE Preferences SET daily_nutrition_target_calories = ? WHERE id = 'default'`,
+            [calculated.targetCalories]
+          );
+        } catch {}
+      }
+
+      const currentKey = localDateKey();
       // Today's entries
       const rows = await db.getAllAsync<NutritionEntry>(
         `SELECT id, food_name, calories, protein_g, carbs_g, fat_g, serving_size, meal_type, source, logged_at
-         FROM NutritionEntry WHERE date_key = ? ORDER BY logged_at ASC`,
-        [dateKey]
+         FROM NutritionEntry WHERE date_key = ? ORDER BY logged_at DESC`,
+        [currentKey]
       );
       setEntries(rows);
-
-      // Last 7-day history
-      const hist = await db.getAllAsync<DayTotal>(
-        `SELECT date_key, SUM(calories) as total_calories
-         FROM NutritionEntry
-         WHERE date_key >= date('now','-6 days')
-         GROUP BY date_key ORDER BY date_key ASC`,
-        []
-      );
-      setWeekHistory(hist);
     } catch (err) {
       console.error('[Nutrition] loadData:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [dateKey]);
+  }, [isProfileComplete]);
 
   useFocusEffect(useCallback(() => {
+    if (!isProfileComplete) return;
     // Support deep-link from BarcodeScanner "openManualEntry" param
-    if (route.params?.openManualEntry) setShowManual(true);
+    if (route.params?.openManualEntry) {
+      setShowManual(true);
+      navigation.setParams({ openManualEntry: undefined });
+    }
     loadData();
-  }, [loadData, route.params]));
+  }, [isProfileComplete, loadData, route.params, navigation]));
 
   const totalCalories = entries.reduce((s, e) => s + e.calories, 0);
   const totalProtein  = entries.reduce((s, e) => s + (e.protein_g  ?? 0), 0);
@@ -123,25 +159,86 @@ export const NutritionScreen: React.FC = () => {
     } catch (err) { console.error('[Nutrition] delete:', err); }
   };
 
+  const clearTodayEntries = async () => {
+    Alert.alert(
+      "Reset Today's Nutrition",
+      'Are you sure you want to clear all logged food entries for today? This will reset consumed calories to 0.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset to 0',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const db = await getDatabase();
+              const currentKey = localDateKey();
+              await db.runAsync('DELETE FROM NutritionEntry WHERE date_key = ?', [currentKey]);
+              setEntries([]);
+              await loadData();
+            } catch (err) {
+              console.error('[Nutrition] clearTodayEntries:', err);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const saveManualEntry = async () => {
-    if (!mFoodName.trim()) { Alert.alert('Required', 'Please enter a food name.'); return; }
+    if (!mFoodName.trim()) {
+      Alert.alert('Required', 'Please enter a food name.');
+      return;
+    }
     const cal = parseInt(mCalories, 10) || 0;
     setIsSaving(true);
     try {
-      const db  = await getDatabase();
-      const id  = Crypto.randomUUID();
-      const d   = new Date();
-      const now = d.toISOString();
+      const db = await getDatabase();
+
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS NutritionEntry (
+          id TEXT PRIMARY KEY NOT NULL,
+          food_name TEXT NOT NULL,
+          calories INTEGER NOT NULL,
+          protein_g REAL NOT NULL,
+          carbs_g REAL NOT NULL,
+          fat_g REAL NOT NULL,
+          serving_size TEXT,
+          meal_type TEXT NOT NULL,
+          source TEXT NOT NULL,
+          logged_at TEXT NOT NULL,
+          date_key TEXT NOT NULL,
+          barcode TEXT
+        );
+      `);
+
+      const id = Crypto.randomUUID();
+      const now = new Date().toISOString();
+      const currentKey = localDateKey();
+
       await db.runAsync(
         `INSERT INTO NutritionEntry
          (id, food_name, calories, protein_g, carbs_g, fat_g, serving_size, meal_type, source, logged_at, date_key)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, mFoodName.trim(), cal,
-         parseFloat(mProtein) || 0, parseFloat(mCarbs) || 0, parseFloat(mFat) || 0,
-         null, mMeal, 'manual', now, dateKey]
+        [
+          id,
+          mFoodName.trim(),
+          cal,
+          parseFloat(mProtein) || 0,
+          parseFloat(mCarbs) || 0,
+          parseFloat(mFat) || 0,
+          null,
+          mMeal || 'Snacks',
+          'manual',
+          now,
+          currentKey,
+        ]
       );
       setShowManual(false);
-      setMFoodName(''); setMCalories(''); setMProtein(''); setMCarbs(''); setMFat('');
+      setMFoodName('');
+      setMCalories('');
+      setMProtein('');
+      setMCarbs('');
+      setMFat('');
       await loadData();
     } catch (err) {
       console.error('[Nutrition] saveManual:', err);
@@ -151,182 +248,316 @@ export const NutritionScreen: React.FC = () => {
     }
   };
 
-  // Grouped entries by meal
-  const grouped = MEAL_TYPES.map(meal => ({
-    meal,
-    items: entries.filter(e => e.meal_type === meal),
-  }));
-
-  // 7-day bar chart
-  const chartDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const label = ['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()];
-    const found = weekHistory.find(h => h.date_key === key);
-    return { key, label, total_calories: found?.total_calories ?? 0 };
-  });
-  const maxCal  = Math.max(...chartDays.map(d => d.total_calories), dailyTarget, 1);
-  const barGap  = CHART_WIDTH / 7;
-  const barW    = barGap * 0.52;
-
   const sourceIcon = (source: string) => {
     if (source === 'barcode')  return '📷';
     if (source === 'ai_scan')  return '🤖';
     return '✏️';
   };
 
+  if (!isProfileComplete) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft color={colors.text} size={24} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Nutrition Tracker</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <View style={styles.gateContainer}>
+          <View style={styles.gateIconWrapper}>
+            <Lock size={38} color="#FFD600" />
+          </View>
+          <Text style={styles.gateTitle}>Profile Setup Required</Text>
+          <Text style={styles.gateMessage}>
+            Complete your profile setup to unlock nutrition tracking, personalized caloric goals, and macronutrient targets.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.gatePrimaryBtn}
+            onPress={() => navigation.navigate('ProfileSetup')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Complete Profile Setup"
+          >
+            <Text style={styles.gatePrimaryBtnText}>Complete Profile Setup</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.gateSecondaryBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Go Back"
+          >
+            <Text style={styles.gateSecondaryBtnText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}><ArrowLeft color={colors.text} size={24} /></TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <ArrowLeft color={colors.text} size={24} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Nutrition Tracker</Text>
-        <View style={{ width: 24 }} />
+        {entries.length > 0 ? (
+          <TouchableOpacity
+            onPress={clearTodayEntries}
+            accessibilityRole="button"
+            accessibilityLabel="Reset today's logged nutrition to 0"
+            style={{ padding: 4 }}
+          >
+            <RotateCcw color="#8E8E93" size={20} />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 24 }} />
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Daily Summary */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.summaryCalories}>{totalCalories}</Text>
-              <Text style={styles.summaryLabel}>of {dailyTarget} kcal</Text>
+        {/* Circular Progress (Laid flat on main background, 200px matching Water screen) */}
+        <View style={styles.ringContainer}>
+          <PercentRing
+            percentage={caloriesPct}
+            size={200}
+            strokeWidth={16}
+            color="#22C55E"
+            trackColor="rgba(34, 197, 94, 0.15)"
+            showPercentageText={false}
+          >
+            <View style={styles.circleInnerContent}>
+              <Text style={styles.circleCaloriesNumber}>{totalCalories}</Text>
+              <Text style={styles.circleCaloriesUnit}>kcal</Text>
+              <Text style={styles.circleCaloriesTarget}>of {dailyTarget} kcal</Text>
             </View>
-            <View style={styles.macroMini}>
-              {[
-                { label: 'Protein', val: totalProtein.toFixed(1), unit: 'g' },
-                { label: 'Carbs',   val: totalCarbs.toFixed(1),   unit: 'g' },
-                { label: 'Fat',     val: totalFat.toFixed(1),     unit: 'g' },
-              ].map(m => (
-                <View key={m.label} style={styles.macroMiniItem}>
-                  <Text style={styles.macroMiniVal}>{m.val}<Text style={styles.macroMiniUnit}>{m.unit}</Text></Text>
-                  <Text style={styles.macroMiniLabel}>{m.label}</Text>
+          </PercentRing>
+        </View>
+
+        {/* 3 Macro Cards: Protein, Carbs, Fat */}
+        <View style={styles.macroCardsRow}>
+          <View style={styles.macroCard}>
+            <Text style={styles.macroLabel}>Protein</Text>
+            <Text style={styles.macroValue}>
+              {totalProtein.toFixed(1)}
+              <Text style={styles.macroUnit}>g</Text>
+            </Text>
+          </View>
+
+          <View style={styles.macroCard}>
+            <Text style={styles.macroLabel}>Carbs</Text>
+            <Text style={styles.macroValue}>
+              {totalCarbs.toFixed(1)}
+              <Text style={styles.macroUnit}>g</Text>
+            </Text>
+          </View>
+
+          <View style={styles.macroCard}>
+            <Text style={styles.macroLabel}>Fat</Text>
+            <Text style={styles.macroValue}>
+              {totalFat.toFixed(1)}
+              <Text style={styles.macroUnit}>g</Text>
+            </Text>
+          </View>
+        </View>
+
+        {/* Action Header & 3 Choices */}
+        <Text style={styles.sectionTitle}>Action</Text>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => setShowManual(true)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Manual"
+          >
+            <PenLine color={colors.textInverse} size={18} strokeWidth={2.2} />
+            <Text style={styles.actionBtnText}>Manual</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => navigation.navigate('BarcodeScannerScreen')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Barcode"
+          >
+            <ScanBarcode color={colors.textInverse} size={18} strokeWidth={2.2} />
+            <Text style={styles.actionBtnText}>Barcode</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => navigation.navigate('AiFoodScannerScreen')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="AI Scanner"
+          >
+            <Camera color={colors.textInverse} size={18} strokeWidth={2.2} />
+            <Text style={styles.actionBtnText}>AI Scanner</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Logged Food Entries List */}
+        {entries.length > 0 ? (
+          <View style={styles.loggedSection}>
+            <Text style={styles.sectionTitle}>Logged Food</Text>
+            <View style={styles.entriesList}>
+              {entries.map((entry) => (
+                <View key={entry.id} style={styles.entryCard}>
+                  <View style={styles.entrySourceIconWrap}>
+                    <Text style={styles.entrySource}>{sourceIcon(entry.source)}</Text>
+                  </View>
+                  <View style={styles.entryInfo}>
+                    <Text style={styles.entryName}>{entry.food_name}</Text>
+                    <Text style={styles.entryMacros}>
+                      {entry.calories} kcal · P {entry.protein_g?.toFixed(1) ?? 0}g · C {entry.carbs_g?.toFixed(1) ?? 0}g · F {entry.fat_g?.toFixed(1) ?? 0}g
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => deleteEntry(entry.id)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.deleteBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${entry.food_name}`}
+                  >
+                    <Trash2 color={colors.textMuted} size={18} />
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
           </View>
-          {/* Progress bar */}
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${caloriesPct}%` as any }]} />
-          </View>
-        </View>
+        ) : null}
 
-        {/* Add Buttons */}
-        <View style={styles.addRow}>
-          <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('BarcodeScannerScreen')}>
-            <ScanBarcode color={colors.textInverse} size={18} />
-            <Text style={styles.addBtnText}>Barcode</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setShowManual(true)}>
-            <PenLine color={colors.textInverse} size={18} />
-            <Text style={styles.addBtnText}>Manual</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('AiFoodScannerScreen')}>
-            <Camera color={colors.textInverse} size={18} />
-            <Text style={styles.addBtnText}>AI Scan</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 7-Day Trend */}
-        <Text style={styles.sectionTitle}>Weekly Trend</Text>
-        <View style={styles.chartCard}>
-          <Svg width={CHART_WIDTH} height={CHART_HEIGHT + 20}>
-            {chartDays.map((day, i) => {
-              const barH    = Math.max(2, (day.total_calories / maxCal) * CHART_HEIGHT);
-              const x       = i * barGap + (barGap - barW) / 2;
-              const isToday = day.key === dateKey;
-              return (
-                <React.Fragment key={day.key}>
-                  <Rect x={x} y={CHART_HEIGHT - barH} width={barW} height={barH} rx={4}
-                    fill={isToday ? colors.primary : 'rgba(10,10,10,0.18)'} />
-                  <SvgText x={x + barW / 2} y={CHART_HEIGHT + 14} textAnchor="middle"
-                    fontSize={10}
-                    fill={isToday ? colors.text : colors.textMuted}>
-                    {day.label}
-                  </SvgText>
-                </React.Fragment>
-              );
-            })}
-          </Svg>
-          <Text style={styles.chartCaption}>Target {dailyTarget} kcal/day</Text>
-        </View>
-
-        {/* Meal Groups */}
-        <Text style={styles.sectionTitle}>Today&apos;s Meals</Text>
-        {isLoading ? (
-          <ActivityIndicator color={colors.primary} />
-        ) : (
-          grouped.map(({ meal, items }) => (
-            <View key={meal} style={styles.mealGroup}>
-              <View style={styles.mealHeader}>
-                <Text style={styles.mealTitle}>{meal}</Text>
-                <Text style={styles.mealCalories}>
-                  {items.reduce((s, e) => s + e.calories, 0)} kcal
-                </Text>
-              </View>
-              {items.length === 0 ? (
-                <Text style={styles.emptyMeal}>No entries yet</Text>
-              ) : (
-                items.map(entry => (
-                  <View key={entry.id} style={styles.entryRow}>
-                    <Text style={styles.entrySource}>{sourceIcon(entry.source)}</Text>
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={styles.entryName}>{entry.food_name}</Text>
-                      <Text style={styles.entryMacros}>
-                        {entry.calories} kcal · P {entry.protein_g?.toFixed(1) ?? 0}g · C {entry.carbs_g?.toFixed(1) ?? 0}g · F {entry.fat_g?.toFixed(1) ?? 0}g
-                      </Text>
-                    </View>
-                    <TouchableOpacity onPress={() => deleteEntry(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Trash2 color={colors.textMuted} size={16} />
-                    </TouchableOpacity>
-                  </View>
-                ))
-              )}
-            </View>
-          ))
-        )}
         <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* Manual Entry Modal */}
-      <Modal visible={showManual} transparent animationType="slide" onRequestClose={() => setShowManual(false)}>
-        <Pressable style={styles.overlay} onPress={() => setShowManual(false)}>
-          <View style={styles.sheet} onStartShouldSetResponder={() => true}>
-            <Text style={styles.sheetTitle}>Manual Entry</Text>
+      <Modal
+        visible={showManual}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowManual(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.overlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setShowManual(false)} />
 
-            <TextInput style={styles.input} placeholder="Food name *" placeholderTextColor={colors.textMuted}
-              value={mFoodName} onChangeText={setMFoodName} />
-            <TextInput style={styles.input} placeholder="Calories (kcal)" placeholderTextColor={colors.textMuted}
-              keyboardType="numeric" value={mCalories} onChangeText={setMCalories} />
-
-            <View style={styles.macroInputRow}>
-              <TextInput style={[styles.input, { flex: 1 }]} placeholder="Protein (g)"
-                placeholderTextColor={colors.textMuted} keyboardType="decimal-pad"
-                value={mProtein} onChangeText={setMProtein} />
-              <TextInput style={[styles.input, { flex: 1 }]} placeholder="Carbs (g)"
-                placeholderTextColor={colors.textMuted} keyboardType="decimal-pad"
-                value={mCarbs} onChangeText={setMCarbs} />
-              <TextInput style={[styles.input, { flex: 1 }]} placeholder="Fat (g)"
-                placeholderTextColor={colors.textMuted} keyboardType="decimal-pad"
-                value={mFat} onChangeText={setMFat} />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Manual Entry</Text>
+              <TouchableOpacity
+                onPress={() => setShowManual(false)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close manual entry"
+              >
+                <X color={colors.textSecondary} size={22} />
+              </TouchableOpacity>
             </View>
 
-            <Text style={styles.fieldLabel}>Meal</Text>
-            <View style={styles.mealPills}>
-              {MEAL_TYPES.map(m => (
-                <TouchableOpacity key={m} style={[styles.mealPill, mMeal === m && styles.mealPillActive]}
-                  onPress={() => setMMeal(m)}>
-                  <Text style={[styles.mealPillText, mMeal === m && styles.mealPillTextActive]}>{m}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+              <Text style={styles.inputLabel}>Food Name *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Oatmeal, Chicken, Rice"
+                placeholderTextColor={colors.textMuted}
+                value={mFoodName}
+                onChangeText={setMFoodName}
+              />
 
-            <TouchableOpacity style={styles.saveBtn} onPress={saveManualEntry} disabled={isSaving}>
-              {isSaving ? <ActivityIndicator color={colors.textInverse} /> :
-                <Text style={styles.saveBtnText}>Add Entry</Text>}
-            </TouchableOpacity>
+              <Text style={styles.inputLabel}>Calories (kcal) *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 350"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={mCalories}
+                onChangeText={setMCalories}
+              />
+
+              <Text style={styles.inputLabel}>Macros (Optional)</Text>
+              <View style={styles.macroInputRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.miniLabel}>Protein (g)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="0"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="decimal-pad"
+                    value={mProtein}
+                    onChangeText={setMProtein}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.miniLabel}>Carbs (g)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="0"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="decimal-pad"
+                    value={mCarbs}
+                    onChangeText={setMCarbs}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.miniLabel}>Fat (g)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="0"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="decimal-pad"
+                    value={mFat}
+                    onChangeText={setMFat}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.inputLabel}>Meal</Text>
+              <View style={styles.mealPills}>
+                {MEAL_TYPES.map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.mealPill, mMeal === m && styles.mealPillActive]}
+                    onPress={() => setMMeal(m)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.mealPillText, mMeal === m && styles.mealPillTextActive]}>
+                      {m}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={saveManualEntry}
+                disabled={isSaving}
+                activeOpacity={0.85}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color="#000000" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Add Entry</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -337,44 +568,317 @@ const styles = StyleSheet.create({
   header:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle:     { fontSize: typography.sizes.lg, fontFamily: typography.fonts.headingBold, color: colors.text },
   content:         { padding: 24 },
-  summaryCard:     { backgroundColor: colors.surface, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, padding: 20, marginBottom: 20 },
-  summaryRow:      { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  summaryCalories: { fontSize: 40, fontFamily: typography.fonts.headingBlack, color: colors.text },
-  summaryLabel:    { fontSize: typography.sizes.xs, color: colors.textSecondary, marginTop: 2 },
-  macroMini:       { flexDirection: 'row', gap: 12 },
-  macroMiniItem:   { alignItems: 'center' },
-  macroMiniVal:    { fontSize: typography.sizes.lg, fontFamily: typography.fonts.headingBlack, color: colors.text },
-  macroMiniUnit:   { fontSize: typography.sizes.xs, color: colors.textSecondary },
-  macroMiniLabel:  { fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 2 },
-  progressTrack:   { height: 6, backgroundColor: colors.surfaceElevated, borderRadius: 3, overflow: 'hidden' },
-  progressFill:    { height: 6, backgroundColor: colors.primary, borderRadius: 3 },
-  addRow:          { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  addBtn:          { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.text, paddingVertical: 12, borderRadius: borderRadius.lg },
-  addBtnText:      { fontSize: typography.sizes.sm, fontWeight: '600', color: colors.textInverse },
-  sectionTitle:    { fontSize: typography.sizes.base, fontFamily: typography.fonts.headingBold, color: colors.text, marginBottom: 12, marginTop: 8 },
-  chartCard:       { backgroundColor: colors.surface, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 24, alignItems: 'center' },
-  chartCaption:    { fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 8 },
-  mealGroup:       { backgroundColor: colors.surface, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, marginBottom: 12, overflow: 'hidden' },
-  mealHeader:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
-  mealTitle:       { fontSize: typography.sizes.sm, fontFamily: typography.fonts.headingBold, color: colors.text },
-  mealCalories:    { fontSize: typography.sizes.sm, color: colors.textSecondary },
-  emptyMeal:       { padding: 16, fontSize: typography.sizes.xs, color: colors.textMuted, fontStyle: 'italic' },
-  entryRow:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
-  entrySource:     { fontSize: 16 },
-  entryName:       { fontSize: typography.sizes.sm, fontWeight: '500', color: colors.text },
-  entryMacros:     { fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 2 },
+  ringContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 26,
+  },
+  circleInnerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circleCaloriesNumber: {
+    fontSize: 42,
+    fontFamily: typography.fonts.headingBlack,
+    color: colors.text,
+    lineHeight: 46,
+  },
+  circleCaloriesUnit: {
+    fontSize: 13,
+    fontFamily: typography.fonts.headingBold,
+    color: '#22C55E',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  circleCaloriesTarget: {
+    fontSize: 12,
+    fontFamily: typography.fonts.body,
+    color: colors.textMuted,
+    marginTop: 4,
+  },
+  macroCardsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  macroCard: {
+    flex: 1,
+    backgroundColor: 'rgba(34, 197, 94, 0.08)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.28)',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  macroLabel: {
+    fontSize: 12,
+    fontFamily: typography.fonts.headingMedium,
+    color: '#4ADE80',
+    marginBottom: 6,
+  },
+  macroValue: {
+    fontSize: 18,
+    fontFamily: typography.fonts.headingBlack,
+    color: '#22C55E',
+  },
+  macroUnit: {
+    fontSize: 12,
+    fontFamily: typography.fonts.body,
+    color: '#86EFAC',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.text,
+    paddingVertical: 13,
+    borderRadius: borderRadius.lg,
+  },
+  actionBtnText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '700',
+    color: colors.textInverse,
+  },
+  sectionTitle: {
+    fontSize: typography.sizes.base,
+    fontFamily: typography.fonts.headingBold,
+    color: colors.text,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  loggedSection: {
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  entriesList: {
+    gap: 10,
+  },
+  entryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  entrySourceIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  entrySource: {
+    fontSize: 16,
+  },
+  entryInfo: {
+    flex: 1,
+  },
+  entryName: {
+    fontSize: 15,
+    fontFamily: typography.fonts.headingBold,
+    color: colors.text,
+    marginBottom: 3,
+  },
+  entryMacros: {
+    fontSize: 12,
+    fontFamily: typography.fonts.body,
+    color: colors.textSecondary,
+  },
+  deleteBtn: {
+    padding: 6,
+  },
+
   // Modal
-  overlay:         { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  sheet:           { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12 },
-  sheetTitle:      { fontSize: typography.sizes.xl, fontFamily: typography.fonts.headingBold, color: colors.text, marginBottom: 4 },
-  input:           { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: 14, fontSize: typography.sizes.sm, color: colors.text },
-  macroInputRow:   { flexDirection: 'row', gap: 10 },
-  fieldLabel:      { fontSize: typography.sizes.sm, fontWeight: '500', color: colors.text },
-  mealPills:       { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  mealPill:        { paddingHorizontal: 14, paddingVertical: 8, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.border },
-  mealPillActive:  { backgroundColor: colors.primary, borderColor: colors.primary },
-  mealPillText:    { fontSize: typography.sizes.sm, fontWeight: '500', color: colors.textSecondary },
-  mealPillTextActive: { color: colors.textInverse, fontWeight: '700' },
-  saveBtn:         { backgroundColor: colors.primary, padding: 16, borderRadius: borderRadius.lg, alignItems: 'center', marginTop: 4 },
-  saveBtnText:     { fontSize: typography.sizes.base, fontWeight: '700', color: colors.textInverse },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '85%',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontFamily: typography.fonts.headingBold,
+    color: colors.text,
+  },
+  inputLabel: {
+    fontSize: 12.5,
+    fontFamily: typography.fonts.headingMedium,
+    color: colors.textSecondary,
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  miniLabel: {
+    fontSize: 11,
+    fontFamily: typography.fonts.body,
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  input: {
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: typography.sizes.sm,
+    color: colors.text,
+  },
+  macroInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  mealPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  mealPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
+  mealPillActive: {
+    backgroundColor: '#22C55E',
+    borderColor: '#22C55E',
+  },
+  mealPillText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  mealPillTextActive: {
+    color: '#000000',
+    fontWeight: '700',
+  },
+  saveBtn: {
+    backgroundColor: '#22C55E',
+    paddingVertical: 15,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  saveBtnText: {
+    fontSize: typography.sizes.base,
+    fontWeight: '800',
+    fontFamily: typography.fonts.headingBold,
+    color: '#000000',
+  },
+  gateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingBottom: 40,
+  },
+  gateIconWrapper: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: 'rgba(255, 214, 0, 0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 214, 0, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  gateTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: typography.fonts.headingBold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  gateMessage: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: typography.fonts.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  gatePrimaryBtn: {
+    backgroundColor: '#FFD600',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#FFD600',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  gatePrimaryBtnText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: typography.fonts.headingBold,
+  },
+  gateSecondaryBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2C2C2E',
+    backgroundColor: '#1C1C1E',
+  },
+  gateSecondaryBtnText: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: typography.fonts.body,
+  },
 });

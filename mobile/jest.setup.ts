@@ -203,3 +203,44 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
+// Expo Constants mock
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: {
+    expoConfig: {
+      extra: {
+        apiBaseUrl: 'https://api.gymflow.app',
+      },
+    },
+  },
+}));
+
+// Expo Asset mock
+jest.mock('expo-asset', () => ({
+  Asset: {
+    fromModule: () => ({ downloadAsync: jest.fn(), uri: 'mock-uri' }),
+    loadAsync: jest.fn(),
+  },
+}));
+
+// Expo Camera mock
+jest.mock('expo-camera', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    CameraView: React.forwardRef((props: any, ref: any) =>
+      React.createElement(View, { testID: 'mock-camera-view', ...props, ref })
+    ),
+    useCameraPermissions: () => [
+      { granted: true, canAskAgain: true, status: 'granted', expires: 'never' },
+      jest.fn().mockResolvedValue({ granted: true, canAskAgain: true, status: 'granted' }),
+    ],
+  };
+});
+
+// Expo Image Picker mock
+jest.mock('expo-image-picker', () => ({
+  launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+  launchCameraAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', granted: true }),
+}));

@@ -6,8 +6,16 @@
  */
 const rnResolver = require('@react-native/jest-preset/jest/resolver');
 const workletsResolver = require('react-native-worklets/jest/resolver');
+const path = require('path');
 
 module.exports = (request, options) => {
+  if (
+    request.includes('winter/fetch') ||
+    (request === './fetch' && options.basedir && options.basedir.includes(path.join('winter')))
+  ) {
+    return path.resolve(__dirname, 'tests/mocks/mockWinterFetch.js');
+  }
+
   const jestDefault = options.defaultResolver;
   return workletsResolver(request, {
     ...options,

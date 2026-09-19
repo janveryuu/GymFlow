@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS Preferences (
   weekly_workout_goal INTEGER NOT NULL DEFAULT 5,
   weight_kg REAL,
   daily_nutrition_target_calories INTEGER,
+  fitness_goal TEXT,
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 `;

@@ -1041,7 +1041,7 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
             style={styles.regenerateHeaderBtn}
             accessibilityLabel="Regenerate"
           >
-            <RotateCcw size={18} color="#0A0A0A" />
+            <RotateCcw size={18} color={colors.text} />
           </TouchableOpacity>
         </View>
       )}
@@ -1054,7 +1054,7 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
           <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
             <View style={styles.headingBlock}>
               <View style={styles.badgeRow}>
-                <Clock size={15} color="#0A0A0A" />
+                <Clock size={15} color={colors.textSecondary} />
                 <Text style={styles.badgeRowText}>TRAINING SCHEDULE</Text>
               </View>
               <Text style={styles.headingTitle}>How often do you train?</Text>
@@ -1134,7 +1134,7 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
               activeOpacity={0.88}
             >
               <Text style={styles.primaryBtnText}>Continue to Difficulty</Text>
-              <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+              <ArrowRight size={18} color={colors.textInverse} style={{ marginLeft: 8 }} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1148,7 +1148,7 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
           <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
             <View style={styles.headingBlock}>
               <View style={styles.badgeRow}>
-                <Target size={15} color="#0A0A0A" />
+                <Target size={15} color={colors.textSecondary} />
                 <Text style={styles.badgeRowText}>INTENSITY CALIBRATION</Text>
               </View>
               <Text style={styles.headingTitle}>What is your target difficulty?</Text>
@@ -1230,7 +1230,7 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
               }}
               activeOpacity={0.88}
             >
-              <Sparkles size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Sparkles size={18} color={colors.textInverse} style={{ marginRight: 8 }} />
               <Text style={styles.primaryBtnText}>Generate AI Workout</Text>
             </TouchableOpacity>
           </View>
@@ -1292,7 +1292,7 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
                         </View>
                       ) : isCurrent ? (
                         <View style={styles.spinnerSquircle}>
-                          <ActivityIndicator size="small" color="#0A0A0A" />
+                          <ActivityIndicator size="small" color={colors.text} />
                         </View>
                       ) : (
                         <View style={styles.pendingDot} />
@@ -1359,21 +1359,21 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
               {/* Summary metrics */}
               <View style={styles.heroMetricsStrip}>
                 <View style={styles.heroMetricItem}>
-                  <Calendar size={14} color="#0A0A0A" />
+                  <Calendar size={14} color={colors.text} />
                   <Text style={styles.heroMetricValue}>
                     {generatedSplit.days.length} Days
                   </Text>
                 </View>
                 <View style={styles.heroMetricDivider} />
                 <View style={styles.heroMetricItem}>
-                  <Zap size={14} color="#0A0A0A" />
+                  <Zap size={14} color={colors.text} />
                   <Text style={styles.heroMetricValue}>
                     {generatedSplit.difficulty.toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.heroMetricDivider} />
                 <View style={styles.heroMetricItem}>
-                  <Dumbbell size={14} color="#0A0A0A" />
+                  <Dumbbell size={14} color={colors.text} />
                   <Text style={styles.heroMetricValue}>
                     {generatedSplit.days.reduce((sum, d) => sum + d.exercises.length, 0)} Total
                   </Text>
@@ -1385,7 +1385,7 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
             <View style={styles.coachRationaleCard}>
               <View style={styles.coachHeaderRow}>
                 <View style={styles.coachIconSquircle}>
-                  <Bot size={18} color="#0A0A0A" />
+                  <Bot size={18} color={colors.text} />
                 </View>
                 <Text style={styles.coachHeaderTitle}>AI Coach Rationale</Text>
               </View>
@@ -1457,14 +1457,14 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
 
                           <View style={styles.exerciseSpecPillsRow}>
                             <View style={styles.specPill}>
-                              <Dumbbell size={11} color="#0A0A0A" />
+                              <Dumbbell size={11} color={colors.text} />
                               <Text style={styles.specPillText}>
                                 {ex.preferredSets} Sets × {ex.preferredReps}
                               </Text>
                             </View>
                             {ex.restTimeSeconds > 0 && (
                               <View style={[styles.specPill, { marginLeft: 6 }]}>
-                                <Clock size={11} color="#0A0A0A" />
+                                <Clock size={11} color={colors.text} />
                                 <Text style={styles.specPillText}>
                                   {ex.restTimeSeconds}s rest
                                 </Text>
@@ -1487,7 +1487,7 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
               onPress={handleStartDayWorkout}
               activeOpacity={0.88}
             >
-              <Dumbbell size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Dumbbell size={18} color={colors.textInverse} style={{ marginRight: 8 }} />
               <Text style={styles.primaryBtnText}>
                 Start {generatedSplit.days[activeDayIndex]?.dayLabel || 'Workout'}
               </Text>
@@ -1512,13 +1512,14 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   screenWrapper: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   topSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -1533,12 +1534,12 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
   },
   aiPillHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -1547,22 +1548,22 @@ const styles = StyleSheet.create({
   aiPillHeaderText: {
     fontSize: 11,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     letterSpacing: 0.5,
   },
   stepCounterText: {
     fontSize: 12,
     fontFamily: typography.fonts.headingSemiBold,
-    color: '#8E8E8E',
+    color: colors.textMuted,
   },
   progressTrack: {
     width: '100%',
     height: 3,
-    backgroundColor: '#EAEAED',
+    backgroundColor: colors.borderSubtle,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.primary,
   },
 
   resultHeader: {
@@ -1572,12 +1573,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F2',
+    borderBottomColor: colors.border,
   },
   resultHeaderTitle: {
     fontSize: 16,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
   },
   regenerateHeaderBtn: {
     width: 38,
@@ -1585,7 +1586,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
   },
 
   scrollBody: {
@@ -1604,20 +1605,20 @@ const styles = StyleSheet.create({
   badgeRowText: {
     fontSize: 11,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.textSecondary,
     letterSpacing: 0.6,
   },
   headingTitle: {
     fontSize: 26,
     fontFamily: typography.fonts.headingBlack,
-    color: '#0A0A0A',
+    color: colors.text,
     letterSpacing: -0.5,
     marginBottom: 8,
   },
   headingSubtitle: {
     fontSize: 14,
     fontFamily: typography.fonts.headingRegular,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
 
@@ -1627,15 +1628,15 @@ const styles = StyleSheet.create({
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     borderRadius: 16,
     padding: 18,
   },
   optionCardActive: {
-    borderColor: '#0A0A0A',
-    backgroundColor: '#F7F7F8',
+    borderColor: colors.primary,
+    backgroundColor: colors.surfaceElevated,
   },
   optionHeaderRow: {
     flexDirection: 'row',
@@ -1645,34 +1646,34 @@ const styles = StyleSheet.create({
   optionTitleText: {
     fontSize: 16,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     marginRight: 8,
   },
   optionTitleTextActive: {
-    color: '#0A0A0A',
+    color: colors.text,
   },
   badgePill: {
-    backgroundColor: '#F0F0F2',
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   badgePillActive: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.surfaceHighlight,
   },
   badgePillText: {
     fontSize: 10,
     fontFamily: typography.fonts.headingSemiBold,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
   },
   badgePillTextActive: {
-    color: '#FFFFFF',
+    color: colors.text,
   },
   optionDescText: {
     fontSize: 12,
     fontFamily: typography.fonts.headingRegular,
-    color: '#737373',
+    color: colors.textSecondary,
     lineHeight: 18,
     paddingRight: 8,
   },
@@ -1681,29 +1682,29 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#D4D4D8',
+    borderColor: colors.borderHighlight,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 12,
   },
   radioOuterActive: {
-    borderColor: '#0A0A0A',
+    borderColor: colors.primary,
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.primary,
   },
 
   bottomBar: {
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F2',
+    borderTopColor: colors.border,
   },
   primaryBtn: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.primary,
     minHeight: 52,
     borderRadius: 14,
     flexDirection: 'row',
@@ -1711,23 +1712,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 3,
   },
   generateBtn: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.primary,
   },
   primaryBtnText: {
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
 
-  /* Agentic Loading Screen — flat on background, no card/container */
+  /* Agentic Loading Screen */
   agenticLoadingFull: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   agenticScrollContent: {
     flexGrow: 1,
@@ -1748,7 +1749,7 @@ const styles = StyleSheet.create({
     width: 130,
     height: 130,
     borderRadius: 65,
-    backgroundColor: '#F0F0F2',
+    backgroundColor: colors.surfaceElevated,
     opacity: 0.6,
   },
   coreAuraMiddle: {
@@ -1756,21 +1757,21 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#EAEAED',
+    backgroundColor: colors.surfaceHighlight,
     opacity: 0.5,
   },
   coreOrb: {
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: '#0A0A0A',
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0A0A0A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 4,
   },
@@ -1781,14 +1782,14 @@ const styles = StyleSheet.create({
   agenticTitle: {
     fontSize: 24,
     fontFamily: typography.fonts.headingBlack,
-    color: '#0A0A0A',
+    color: colors.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   agenticSubtitle: {
     fontSize: 14,
     fontFamily: typography.fonts.headingRegular,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 20,
@@ -1804,10 +1805,10 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.text,
   },
 
-  /* Reasoning timeline — no card, just clean vertical list */
+  /* Reasoning timeline */
   reasoningTimeline: {
     width: '100%',
     paddingHorizontal: 4,
@@ -1834,9 +1835,9 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: '#0A0A0A',
+    borderColor: colors.text,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1844,13 +1845,13 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#D4D4D8',
+    backgroundColor: colors.borderHighlight,
     marginTop: 6,
   },
   stepConnector: {
     width: 2,
     height: 24,
-    backgroundColor: '#EAEAED',
+    backgroundColor: colors.border,
     marginVertical: 4,
   },
   stepConnectorDone: {
@@ -1862,16 +1863,16 @@ const styles = StyleSheet.create({
   reasoningStepTitle: {
     fontSize: 13,
     fontFamily: typography.fonts.headingSemiBold,
-    color: '#0A0A0A',
+    color: colors.text,
   },
   reasoningStepTitleActive: {
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
   },
   reasoningStepDesc: {
     fontSize: 11,
     fontFamily: typography.fonts.headingRegular,
-    color: '#737373',
+    color: colors.textSecondary,
     marginTop: 2,
     lineHeight: 16,
   },
@@ -1882,15 +1883,15 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   routineHeroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 2,
   },
@@ -1903,7 +1904,7 @@ const styles = StyleSheet.create({
   heroAiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.surfaceHighlight,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
@@ -1912,11 +1913,11 @@ const styles = StyleSheet.create({
   heroAiBadgeText: {
     fontSize: 10,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: colors.text,
     letterSpacing: 0.5,
   },
   frequencyTag: {
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
@@ -1924,19 +1925,19 @@ const styles = StyleSheet.create({
   frequencyTagText: {
     fontSize: 10,
     fontFamily: typography.fonts.headingBold,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
   },
   routineHeroTitle: {
     fontSize: 22,
     fontFamily: typography.fonts.headingBlack,
-    color: '#0A0A0A',
+    color: colors.text,
     letterSpacing: -0.4,
     marginBottom: 16,
   },
   heroMetricsStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -1951,19 +1952,19 @@ const styles = StyleSheet.create({
   heroMetricValue: {
     fontSize: 12,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
   },
   heroMetricDivider: {
     width: 1,
     height: 16,
-    backgroundColor: '#EAEAED',
+    backgroundColor: colors.border,
   },
 
   coachRationaleCard: {
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 16,
     marginBottom: 20,
   },
@@ -1977,21 +1978,21 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
   },
   coachHeaderTitle: {
     fontSize: 13,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
   },
   coachRationaleText: {
     fontSize: 12,
     fontFamily: typography.fonts.headingRegular,
-    color: '#525252',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
 
@@ -2008,21 +2009,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1.5,
     borderColor: 'transparent',
   },
   dayTabActive: {
-    backgroundColor: '#0A0A0A',
-    borderColor: '#0A0A0A',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   dayTabText: {
     fontSize: 12,
     fontFamily: typography.fonts.headingBold,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
   },
   dayTabTextActive: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
 
   /* Day Detail */
@@ -2035,7 +2036,7 @@ const styles = StyleSheet.create({
   dayDetailTitle: {
     fontSize: 17,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     marginBottom: 8,
   },
   dayDetailMetrics: {
@@ -2046,7 +2047,7 @@ const styles = StyleSheet.create({
   dayMetricPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
@@ -2055,7 +2056,7 @@ const styles = StyleSheet.create({
   dayMetricText: {
     fontSize: 11,
     fontFamily: typography.fonts.headingSemiBold,
-    color: '#0A0A0A',
+    color: colors.text,
   },
 
   exercisesListStack: {
@@ -2064,9 +2065,9 @@ const styles = StyleSheet.create({
   exerciseItemCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     borderRadius: 16,
     padding: 14,
   },
@@ -2074,7 +2075,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -2082,13 +2083,13 @@ const styles = StyleSheet.create({
   exerciseStepText: {
     fontSize: 11,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
   },
   exerciseIllustrationWrap: {
     width: 50,
     height: 50,
     borderRadius: 12,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -2100,13 +2101,13 @@ const styles = StyleSheet.create({
   exerciseTitleText: {
     fontSize: 14,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     marginBottom: 2,
   },
   exerciseEquipmentText: {
     fontSize: 11,
     fontFamily: typography.fonts.headingRegular,
-    color: '#737373',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   exerciseSpecPillsRow: {
@@ -2116,7 +2117,7 @@ const styles = StyleSheet.create({
   specPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -2125,14 +2126,14 @@ const styles = StyleSheet.create({
   specPillText: {
     fontSize: 10,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
   },
 
   resultBottomBar: {
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F2',
+    borderTopColor: colors.border,
     gap: 8,
   },
   secondarySaveBtn: {
@@ -2140,11 +2141,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
   },
   secondarySaveBtnText: {
     fontSize: 14,
     fontFamily: typography.fonts.headingSemiBold,
-    color: '#0A0A0A',
+    color: colors.text,
   },
 });

@@ -40,8 +40,6 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
   const { getCustomWorkoutById, removeCustomWorkout } = useCustomWorkoutsStore();
   const routine = getCustomWorkoutById(routineId);
 
-  // Selected exercise for information modal
-  const [selectedExercise, setSelectedExercise] = useState<CustomExerciseItem | null>(null);
   const [isStarted, setIsStarted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isConfirmDoneModalVisible, setIsConfirmDoneModalVisible] = useState(false);
@@ -76,24 +74,24 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <ChevronLeft size={24} color="#0A0A0A" strokeWidth={2.5} />
+            <ChevronLeft size={24} color={colors.text} strokeWidth={2.5} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Routine</Text>
           <View style={{ width: 38 }} />
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Dumbbell size={48} color="#A1A1AA" style={{ marginBottom: 12 }} />
-          <Text style={{ fontSize: 18, fontWeight: '700', color: '#0A0A0A', marginBottom: 6 }}>
+          <Dumbbell size={48} color={colors.textMuted} style={{ marginBottom: 12 }} />
+          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 6 }}>
             Routine Not Found
           </Text>
-          <Text style={{ fontSize: 13, color: '#71717A', textAlign: 'center', marginBottom: 20 }}>
+          <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginBottom: 20 }}>
             This custom routine might have been removed or does not exist.
           </Text>
           <TouchableOpacity
-            style={{ backgroundColor: '#0A0A0A', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 }}
+            style={{ backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 }}
             onPress={() => navigation.goBack()}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Return to Workouts</Text>
+            <Text style={{ color: colors.textInverse, fontWeight: '700', fontSize: 14 }}>Return to Workouts</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -108,7 +106,11 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
     } catch {
       // Haptics optional
     }
-    setSelectedExercise(ex);
+    navigation.navigate('WorkoutDetail', {
+      workoutId: ex.id,
+      exercise: ex,
+      routineId: routine.id,
+    });
   };
 
   const handleToggleFinish = (exerciseId: string) => {
@@ -216,7 +218,7 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <ChevronLeft size={24} color="#0A0A0A" strokeWidth={2.5} />
+          <ChevronLeft size={24} color={colors.text} strokeWidth={2.5} />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle} numberOfLines={1}>
@@ -280,6 +282,7 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
                   <WorkoutIllustration
                     slug={exercise.slug}
                     size={52}
+                    backgroundColor="#FFFFFF"
                     containerStyle={styles.exerciseIllustration}
                   />
                 ) : (
@@ -346,153 +349,18 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
                 <Timer size={16} color="#22C55E" />
                 <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
               </View>
-              <Text style={styles.startButtonText}>Finish Workout</Text>
+              <Text style={[styles.startButtonText, { color: colors.text }]}>Finish Workout</Text>
             </View>
           ) : (
             <View style={styles.startRow}>
-              <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+              <Play size={16} color={colors.textInverse} fill={colors.textInverse} />
               <Text style={styles.startButtonText}>Start Workout</Text>
             </View>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* 5. EXERCISE INFORMATION MODAL */}
-      <Modal
-        visible={Boolean(selectedExercise)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedExercise(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[
-              styles.modalCard,
-              selectedExercise &&
-                finishedExerciseIds.includes(selectedExercise.id) &&
-                styles.modalCardFinished,
-            ]}
-          >
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View style={styles.categoryRow}>
-                <Text style={styles.modalCategoryText}>
-                  {selectedExercise?.category?.toUpperCase() || 'EXERCISE SPECIFICATIONS'}
-                </Text>
-                {selectedExercise &&
-                  finishedExerciseIds.includes(selectedExercise.id) && (
-                    <View style={styles.finishedTag}>
-                      <Check size={9} color="#16A34A" strokeWidth={3} />
-                      <Text style={styles.finishedTagText}>COMPLETED</Text>
-                    </View>
-                  )}
-              </View>
-              <TouchableOpacity
-                onPress={() => setSelectedExercise(null)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <X size={20} color="#8E8E8E" />
-              </TouchableOpacity>
-            </View>
 
-            {/* Large Illustration / Header */}
-            {selectedExercise?.slug && (
-              <View style={styles.modalIllustrationWrap}>
-                <WorkoutIllustration
-                  slug={selectedExercise.slug}
-                  size={120}
-                  containerStyle={styles.modalIllustration}
-                />
-              </View>
-            )}
-
-            <Text style={styles.modalExerciseTitle}>
-              {selectedExercise?.title}
-            </Text>
-
-            <Text style={styles.modalEquipmentText}>
-              Equipment: {selectedExercise?.equipment || 'Free Weights'} • Difficulty: {selectedExercise?.difficulty || 'Intermediate'}
-            </Text>
-
-            {/* 3 TARGET SPEC BOXES: Sets, Reps, Rest */}
-            <View style={styles.specsRow}>
-              {/* Sets */}
-              <View style={styles.specBox}>
-                <Dumbbell size={16} color="#0A0A0A" />
-                <Text style={styles.specBoxValue}>
-                  {selectedExercise?.preferredSets || 4}
-                </Text>
-                <Text style={styles.specBoxLabel}>Sets</Text>
-              </View>
-
-              {/* Reps */}
-              <View style={styles.specBox}>
-                <Repeat size={16} color="#0A0A0A" />
-                <Text style={styles.specBoxValue}>
-                  {selectedExercise?.preferredReps || '10-12'}
-                </Text>
-                <Text style={styles.specBoxLabel}>Reps</Text>
-              </View>
-
-              {/* Rest Time */}
-              <View style={styles.specBox}>
-                <Timer size={16} color="#0A0A0A" />
-                <Text style={styles.specBoxValue}>
-                  {selectedExercise?.restTimeSeconds || 60}s
-                </Text>
-                <Text style={styles.specBoxLabel}>Rest Interval</Text>
-              </View>
-            </View>
-
-            {/* Pro Form & Technique Tip */}
-            <View style={styles.tipCard}>
-              <View style={styles.tipHeader}>
-                <Lightbulb size={16} color="#0A0A0A" />
-                <Text style={styles.tipTitle}>Recommended Technique</Text>
-              </View>
-              <Text style={styles.tipDesc}>
-                {selectedExercise?.tips ||
-                  'Control the eccentric phase for 2-3 seconds, maintain core tightness, and perform full range of motion.'}
-              </Text>
-            </View>
-
-            {/* Finish Action Button */}
-            {selectedExercise && (
-              <TouchableOpacity
-                style={[
-                  styles.finishExerciseBtn,
-                  finishedExerciseIds.includes(selectedExercise.id) &&
-                    styles.finishExerciseBtnCompleted,
-                ]}
-                onPress={() => handleToggleFinish(selectedExercise.id)}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  finishedExerciseIds.includes(selectedExercise.id)
-                    ? 'Mark exercise as incomplete'
-                    : 'Finish exercise'
-                }
-              >
-                {finishedExerciseIds.includes(selectedExercise.id) ? (
-                  <>
-                    <CheckCircle2 size={18} color="#FFFFFF" strokeWidth={2.5} />
-                    <Text style={styles.finishExerciseBtnText}>
-                      Finished • Completed
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Check size={18} color="#FFFFFF" strokeWidth={3} />
-                    <Text style={styles.finishExerciseBtnText}>
-                      Finish Exercise
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </Modal>
 
       {/* 6. "ARE YOUR WORKOUT DONE?" CONFIRMATION MODAL */}
       <Modal
@@ -515,13 +383,13 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
             {/* Stats Preview Box */}
             <View style={styles.confirmStatsBox}>
               <View style={styles.confirmStatItem}>
-                <Clock size={16} color="#0A0A0A" />
+                <Clock size={16} color={colors.text} />
                 <Text style={styles.confirmStatValue}>{formatTime(elapsedSeconds)}</Text>
                 <Text style={styles.confirmStatLabel}>Elapsed</Text>
               </View>
               <View style={styles.confirmStatDivider} />
               <View style={styles.confirmStatItem}>
-                <Dumbbell size={16} color="#0A0A0A" />
+                <Dumbbell size={16} color={colors.text} />
                 <Text style={styles.confirmStatValue}>
                   {finishedExerciseIds.length}/{exercises.length}
                 </Text>
@@ -529,7 +397,7 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
               </View>
               <View style={styles.confirmStatDivider} />
               <View style={styles.confirmStatItem}>
-                <Flame size={16} color="#0A0A0A" />
+                <Flame size={16} color={colors.text} />
                 <Text style={styles.confirmStatValue}>
                   {Math.max(25, Math.round((elapsedSeconds / 60) * 8.5))}
                 </Text>
@@ -563,7 +431,7 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -571,9 +439,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F2',
+    borderBottomColor: colors.border,
   },
   backButton: {
     width: 38,
@@ -581,12 +449,12 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
   },
   headerTitle: {
     fontSize: 18,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     textAlign: 'center',
     flex: 1,
@@ -598,7 +466,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF1F0',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -612,42 +480,42 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     marginBottom: 2,
   },
   sectionSubtitle: {
     fontSize: 12,
     fontFamily: typography.fonts.body,
-    color: '#8E8E8E',
+    color: colors.textSecondary,
   },
 
   /* Exercise Card */
   exerciseCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 12,
     marginBottom: 10,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 2,
   },
   exerciseCardFinished: {
-    borderColor: '#22C55E', // Green border when exercise is finished
-    borderWidth: 2,
-    backgroundColor: '#F7FCF9',
+    borderColor: '#22C55E',
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
   },
   stepBadge: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#F0F0F2',
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -655,7 +523,7 @@ const styles = StyleSheet.create({
   stepBadgeText: {
     fontSize: 11,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
   },
   stepBadgeFinished: {
@@ -671,7 +539,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: 4,
@@ -679,7 +547,7 @@ const styles = StyleSheet.create({
   finishedTagText: {
     fontSize: 9,
     fontFamily: typography.fonts.headingBold,
-    color: '#16A34A',
+    color: '#22C55E',
     fontWeight: '800',
     letterSpacing: 0.4,
   },
@@ -687,7 +555,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 12,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -698,7 +566,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderWidth: 0,
     borderRadius: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
   },
   exerciseInfo: {
     flex: 1,
@@ -706,14 +574,14 @@ const styles = StyleSheet.create({
   exerciseCategory: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     letterSpacing: 0.5,
     marginBottom: 1,
   },
   exerciseTitle: {
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
     marginBottom: 4,
   },
@@ -723,7 +591,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   targetBadge: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.surfaceHighlight,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -731,24 +599,24 @@ const styles = StyleSheet.create({
   targetBadgeText: {
     fontSize: 10.5,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
   },
   targetBadgeSecondary: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     gap: 4,
   },
   targetBadgeSecondaryText: {
     fontSize: 10.5,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   chevron: {
@@ -763,7 +631,7 @@ const styles = StyleSheet.create({
     right: 16,
   },
   startButton: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.primary,
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
@@ -775,14 +643,14 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   startButtonActive: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.surfaceElevated,
     borderColor: '#22C55E',
     borderWidth: 1.5,
   },
   startButtonText: {
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '700',
   },
   activeTimerRow: {
@@ -801,7 +669,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: colors.surfaceHighlight,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
@@ -816,7 +684,7 @@ const styles = StyleSheet.create({
   /* Modal */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -824,19 +692,19 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 20,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.5,
     shadowRadius: 20,
     elevation: 10,
   },
   modalCardFinished: {
-    borderColor: '#22C55E', // Green border when completed
+    borderColor: '#22C55E',
     borderWidth: 2,
   },
   modalHeader: {
@@ -848,7 +716,7 @@ const styles = StyleSheet.create({
   modalCategoryText: {
     fontSize: 10.5,
     fontFamily: typography.fonts.headingBold,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     letterSpacing: 0.8,
   },
   modalIllustrationWrap: {
@@ -868,7 +736,7 @@ const styles = StyleSheet.create({
   modalExerciseTitle: {
     fontSize: 18,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '800',
     textAlign: 'center',
     marginBottom: 4,
@@ -876,7 +744,7 @@ const styles = StyleSheet.create({
   modalEquipmentText: {
     fontSize: 11.5,
     fontFamily: typography.fonts.body,
-    color: '#8E8E8E',
+    color: colors.textMuted,
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -890,10 +758,10 @@ const styles = StyleSheet.create({
   },
   specBox: {
     flex: 1,
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -901,7 +769,7 @@ const styles = StyleSheet.create({
   specBoxValue: {
     fontSize: 16,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '800',
     marginTop: 4,
     marginBottom: 1,
@@ -909,16 +777,16 @@ const styles = StyleSheet.create({
   specBoxLabel: {
     fontSize: 10,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
 
   /* Tip Card */
   tipCard: {
-    backgroundColor: '#F5F5F7',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 12,
     marginBottom: 16,
   },
@@ -931,17 +799,17 @@ const styles = StyleSheet.create({
   tipTitle: {
     fontSize: 12,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '700',
   },
   tipDesc: {
     fontSize: 11.5,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     lineHeight: 16,
   },
   finishExerciseBtn: {
-    backgroundColor: '#16A34A', // Vibrant fitness green
+    backgroundColor: '#16A34A',
     borderRadius: 12,
     paddingVertical: 13,
     flexDirection: 'row',
@@ -956,7 +824,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   finishExerciseBtnCompleted: {
-    backgroundColor: '#15803D', // Darker forest green when completed
+    backgroundColor: '#15803D',
   },
   finishExerciseBtnText: {
     fontSize: 14,
@@ -968,15 +836,15 @@ const styles = StyleSheet.create({
   confirmModalCard: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     padding: 24,
     alignItems: 'center',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.5,
     shadowRadius: 20,
     elevation: 10,
   },
@@ -984,7 +852,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
@@ -992,7 +860,7 @@ const styles = StyleSheet.create({
   confirmModalTitle: {
     fontSize: 20,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '800',
     textAlign: 'center',
     marginBottom: 6,
@@ -1000,7 +868,7 @@ const styles = StyleSheet.create({
   confirmModalSubtitle: {
     fontSize: 13,
     fontFamily: typography.fonts.body,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 20,
@@ -1010,10 +878,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    backgroundColor: '#F7F7F8',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#EAEAED',
+    borderColor: colors.border,
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginBottom: 20,
@@ -1026,23 +894,23 @@ const styles = StyleSheet.create({
   confirmStatValue: {
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    color: '#0A0A0A',
+    color: colors.text,
     fontWeight: '800',
     marginTop: 2,
   },
   confirmStatLabel: {
     fontSize: 10,
     fontFamily: typography.fonts.body,
-    color: '#8E8E8E',
+    color: colors.textMuted,
   },
   confirmStatDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#EAEAED',
+    backgroundColor: colors.border,
   },
   confirmDoneBtn: {
     width: '100%',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 13,
     alignItems: 'center',
@@ -1051,7 +919,7 @@ const styles = StyleSheet.create({
   confirmDoneBtnText: {
     fontSize: 15,
     fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '700',
   },
   confirmResumeBtn: {
@@ -1061,7 +929,7 @@ const styles = StyleSheet.create({
   confirmResumeBtnText: {
     fontSize: 13,
     fontFamily: typography.fonts.headingMedium,
-    color: '#8E8E8E',
+    color: colors.textMuted,
     fontWeight: '600',
   },
 });

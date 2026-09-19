@@ -30,7 +30,7 @@ export const WorkoutIllustration: React.FC<WorkoutIllustrationProps> = ({
   loopIntervalMs = 750,
   containerStyle,
   imageStyle,
-  backgroundColor = colors.surfaceElevated,
+  backgroundColor = '#FFFFFF',
 }) => {
   const [currentFrame, setCurrentFrame] = useState<1 | 2 | 3>(frameIndex);
   const [prevPropFrame, setPrevPropFrame] = useState(frameIndex);
@@ -55,6 +55,18 @@ export const WorkoutIllustration: React.FC<WorkoutIllustrationProps> = ({
   };
 
   const assetSource = slug ? getLocalWorkoutFrame(slug, currentFrame) : null;
+
+  const flatContainerStyle = StyleSheet.flatten(containerStyle);
+  const resolvedBg = (flatContainerStyle?.backgroundColor as string) || backgroundColor;
+  const isLightBg =
+    typeof resolvedBg === 'string' &&
+    (resolvedBg.toLowerCase() === '#ffffff' ||
+      resolvedBg.toLowerCase() === '#fff' ||
+      resolvedBg.toLowerCase() === 'white' ||
+      resolvedBg.toLowerCase() === '#f5f5f5' ||
+      resolvedBg.toLowerCase() === '#fafafa' ||
+      resolvedBg.toLowerCase().startsWith('rgba(255, 255, 255') ||
+      resolvedBg.toLowerCase().startsWith('rgb(255, 255, 255'));
 
   const content = (
     <View
@@ -85,7 +97,7 @@ export const WorkoutIllustration: React.FC<WorkoutIllustrationProps> = ({
         />
       ) : (
         <View style={styles.fallback}>
-          <Dumbbell size={size * 0.36} color={colors.textSecondary} />
+          <Dumbbell size={size * 0.36} color={isLightBg ? '#0A0A0A' : colors.textSecondary} />
         </View>
       )}
 
@@ -96,7 +108,9 @@ export const WorkoutIllustration: React.FC<WorkoutIllustrationProps> = ({
               key={idx}
               style={[
                 styles.dot,
-                currentFrame === idx ? styles.dotActive : styles.dotInactive,
+                currentFrame === idx
+                  ? (isLightBg ? styles.dotActiveDark : styles.dotActive)
+                  : (isLightBg ? styles.dotInactiveDark : styles.dotInactive),
               ]}
             />
           ))}
@@ -112,6 +126,7 @@ export const WorkoutIllustration: React.FC<WorkoutIllustrationProps> = ({
         activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityLabel={`Illustration frame ${currentFrame} of 3. Tap to advance.`}
+        style={{ width: '100%', alignItems: 'center' }}
       >
         {content}
       </TouchableOpacity>
@@ -139,7 +154,7 @@ const styles = StyleSheet.create({
   },
   dotsIndicator: {
     position: 'absolute',
-    bottom: 6,
+    bottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -156,5 +171,12 @@ const styles = StyleSheet.create({
   },
   dotInactive: {
     backgroundColor: colors.borderHighlight,
+  },
+  dotActiveDark: {
+    backgroundColor: '#0A0A0A',
+    width: 12,
+  },
+  dotInactiveDark: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
   },
 });

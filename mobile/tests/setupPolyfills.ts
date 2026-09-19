@@ -35,9 +35,30 @@ if (typeof (globalThis as any).__fbBatchedBridgeConfig === 'undefined') {
   };
 }
 
+if (typeof (globalThis as any).__fbBatchedBridgeConfig === 'undefined') {
+  (globalThis as any).__fbBatchedBridgeConfig = {
+    remoteModuleConfig: [],
+  };
+}
+
+if (typeof (globalThis as any).expo === 'undefined') {
+  (globalThis as any).expo = {
+    EventEmitter: class MockEventEmitter {
+      addListener() {
+        return { remove: () => {} };
+      }
+      removeListener() {}
+      removeAllListeners() {}
+      emit() {}
+    },
+    modules: {},
+  };
+}
+
 // Silence noisy console warnings if any
 const originalWarn = console.warn;
 console.warn = (...args: unknown[]) => {
   if (typeof args[0] === 'string' && args[0].includes('Constants.manifest')) return;
   originalWarn(...args);
 };
+

@@ -15,12 +15,14 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Lock, Mail, AlertCircle, Zap } from 'lucide-react-native';
+import { Lock, Mail, AlertCircle, Zap, ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { colors, typography, borderRadius, spacing } from '../../theme';
 import { apiClient, setAuthToken } from '../../api/client';
+import { getDatabase } from '../../db/connection';
 import { useAuthStore } from '../../store/authStore';
 import { useDevMockStore } from '../../store/devMockStore';
+import { useCustomWorkoutsStore } from '../../store/customWorkoutsStore';
 import { GymFlowLogo, GymFlowWordmark } from '../../components/GymFlowBrand';
 
 const GoogleIcon: React.FC<{ size?: number }> = ({ size = 22 }) => (
@@ -44,6 +46,15 @@ const GoogleIcon: React.FC<{ size?: number }> = ({ size = 22 }) => (
   </Svg>
 );
 
+const AppleIcon: React.FC<{ size?: number; color?: string }> = ({ size = 20, color = '#000000' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Path
+      fill={color}
+      d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-1.98.6-2.61 1.34-.56.64-1.04 1.69-.91 2.71 1 .08 2.01-.48 2.6-1.2z"
+    />
+  </Svg>
+);
+
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -52,14 +63,29 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 interface LoginScreenProps {
+  route?: {
+    params?: {
+      onboardingData?: any;
+      generatedPlan?: any;
+      mode?: 'login' | 'signup';
+    };
+  };
   navigation: any;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ route, navigation }) => {
+  const onboardingData = route?.params?.onboardingData;
+  const generatedPlan = route?.params?.generatedPlan;
+  const [isSignUp, setIsSignUp] = useState(route?.params?.mode === 'signup');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingProvider, setSubmittingProvider] = useState<'google' | 'apple' | null>(null);
   const [showEmailForm, setShowEmailForm] = useState(false);
   const setAuth = useAuthStore((state) => state.setAuth);
+
+  const defaultEmail = onboardingData?.firstName 
+    ? `${onboardingData.firstName.toLowerCase()}.${(onboardingData.lastName || 'doe').toLowerCase()}@gymflow.test` 
+    : 'alex.vance@gymflow.com';
 
   const {
     control,
@@ -68,10 +94,103 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: 'alex.vance@gymflow.com',
+      email: defaultEmail,
       password: 'password123',
     },
   });
+
+  const syncOnboardingProfile = async () => {
+    if (onboardingData?.fullName) {
+      try {
+        await apiClient.patch('/api/v1/member/profile', {
+          name: onboardingData.fullName,
+          phone: onboardingData.phone || '',
+        });
+      } catch {
+        // Optional sync in mock/offline
+      }
+    }
+
+    if (onboardingData?.fitnessGoal) {
+      try {
+        const db = await getDatabase();
+        await db.runAsync(
+          `INSERT OR IGNORE INTO Preferences (id, workout_type, intensity, weekly_workout_goal)
+           VALUES ('default', 'full-body', 'moderate', 5)`
+        );
+        await db.runAsync(
+          `UPDATE Preferences SET fitness_goal = ? WHERE id = 'default'`,
+          [onboardingData.fitnessGoal]
+        );
+      } catch {
+        // Optional sync in mock/offline
+      }
+    }
+
+    if (generatedPlan?.title) {
+      try {
+        const customWorkout = {
+          id: `plan-${Date.now()}`,
+          title: generatedPlan.title,
+          description: `Custom ${generatedPlan.daysPerWeek} split synthesized for ${onboardingData?.fullName || 'you'} targeting ${generatedPlan.goal || 'Hypertrophy'}.`,
+          category: 'Custom Routine',
+          difficulty: generatedPlan.difficulty || 'Intermediate',
+          duration_minutes: 50,
+          calories: generatedPlan.calories || 440,
+          image_url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=800&auto=format&fit=crop',
+          created_at: new Date().toISOString(),
+          isCustomRoutine: true,
+          routineExercises: [
+            {
+              id: 'ex-1',
+              title: 'Barbell Back Squats',
+              slug: 'barbell-squat',
+              category: 'Legs',
+              equipment: 'Barbell & Squat Rack',
+              difficulty: 'Intermediate',
+              preferredSets: 4,
+              preferredReps: '8 - 10 reps',
+              restTimeSeconds: 90,
+              tips: 'Brace your core and descend smoothly to parallel.',
+              duration_minutes: 15,
+              calories: 120,
+            },
+            {
+              id: 'ex-2',
+              title: 'Flat Barbell Bench Press',
+              slug: 'bench-press',
+              category: 'Chest',
+              equipment: 'Barbell & Bench',
+              difficulty: 'Intermediate',
+              preferredSets: 4,
+              preferredReps: '8 - 10 reps',
+              restTimeSeconds: 90,
+              tips: 'Retract shoulder blades and press with controlled tempo.',
+              duration_minutes: 15,
+              calories: 110,
+            },
+            {
+              id: 'ex-3',
+              title: 'Barbell Bent-Over Row',
+              slug: 'bent-over-row',
+              category: 'Back',
+              equipment: 'Barbell',
+              difficulty: 'Intermediate',
+              preferredSets: 3,
+              preferredReps: '10 - 12 reps',
+              restTimeSeconds: 60,
+              tips: 'Hinge at the hips and pull towards the belly button.',
+              duration_minutes: 12,
+              calories: 95,
+            },
+          ],
+        };
+        useCustomWorkoutsStore.getState().addCustomWorkout(customWorkout as any);
+      } catch {
+        // Ignore
+      }
+    }
+  };
 
   const onSubmit = async (data: LoginFormData) => {
     setErrorMessage(null);
@@ -85,13 +204,32 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
       const { token, user } = response.data;
       const mustChange = user?.must_change_password ?? false;
+      const resolvedUser = {
+        ...user,
+        ...(onboardingData?.fitnessGoal ? { fitness_goal: onboardingData.fitnessGoal } : {}),
+      };
 
-      await setAuth(token, user, mustChange);
+      await syncOnboardingProfile();
+      await setAuth(token, resolvedUser, mustChange);
 
       if (mustChange) {
         navigation.navigate('ForcedPasswordReset');
       }
     } catch (err: any) {
+      if (err?.code === 'ERR_NETWORK' || !err?.response) {
+        useDevMockStore.getState().setMockEnabled(true);
+        const fallbackUser = {
+          id: 1,
+          name: onboardingData?.fullName || 'Jane Doe',
+          email: data.email.trim(),
+          role: 'member' as const,
+          must_change_password: false,
+          fitness_goal: onboardingData?.fitnessGoal || 'build_muscle',
+        };
+        await setAuth('dev-offline-token-gymflow', fallbackUser, false);
+        return;
+      }
+
       if (err?.response?.status === 401) {
         setErrorMessage('Invalid email or password. Please check your credentials.');
       } else if (err?.response?.data?.message) {
@@ -104,39 +242,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleAppleLogin = async () => {
     setErrorMessage(null);
     setIsSubmitting(true);
+    setSubmittingProvider('apple');
 
     try {
-      const response = await apiClient.post('/api/v1/auth/login', {
-        email: 'jane.doe@gymflow.test',
-        password: 'Password123!',
-      });
+      const response = await apiClient.post(
+        '/api/v1/auth/login',
+        {
+          email: 'alex.apple@gymflow.test',
+          password: 'Password123!',
+        },
+        { timeout: 2500 }
+      );
 
       const { token, user } = response.data;
-      // Set active auth token for client requests during setup
-      setAuthToken(token);
-
-      // Transition immediately to the multi-step Profile Setup onboarding flow
-      navigation.navigate('ProfileSetup', { token, user, isGoogleAuth: true, autofill: true });
-    } catch (err: any) {
-      if (err?.response?.data?.message) {
-        setErrorMessage(err.response.data.message);
-      } else {
-        setErrorMessage('Unable to connect to database. Please check your network connection.');
-      }
+      const resolvedUser = {
+        ...user,
+        ...(onboardingData?.fitnessGoal ? { fitness_goal: onboardingData.fitnessGoal } : {}),
+      };
+      await syncOnboardingProfile();
+      await setAuth(token, resolvedUser, false);
+    } catch {
+      useDevMockStore.getState().setMockEnabled(true);
+      const fallbackUser = {
+        id: 2,
+        name: onboardingData?.fullName || 'Alex Vance',
+        email: 'alex.apple@gymflow.test',
+        role: 'member' as const,
+        must_change_password: false,
+        fitness_goal: onboardingData?.fitnessGoal || 'build_muscle',
+      };
+      await setAuth('dev-offline-token-gymflow', fallbackUser, false);
     } finally {
       setIsSubmitting(false);
+      setSubmittingProvider(null);
     }
   };
 
-  const handleDevBypass = async () => {
+  const handleGoogleLogin = async () => {
     setErrorMessage(null);
     setIsSubmitting(true);
+    setSubmittingProvider('google');
 
     try {
-      // 1. Attempt quick authentication with seeded member credentials
       const response = await apiClient.post(
         '/api/v1/auth/login',
         {
@@ -147,20 +297,61 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       );
 
       const { token, user } = response.data;
-      setAuthToken(token);
-      navigation.navigate('ProfileSetup', { token, user, isGoogleAuth: true, autofill: true });
+      const resolvedUser = {
+        ...user,
+        ...(onboardingData?.fitnessGoal ? { fitness_goal: onboardingData.fitnessGoal } : {}),
+      };
+      await syncOnboardingProfile();
+      await setAuth(token, resolvedUser, false);
     } catch {
-      // 2. Offline / Mock fallback: proceed to ProfileSetup with member profile autofilled
       useDevMockStore.getState().setMockEnabled(true);
       const fallbackUser = {
         id: 1,
-        name: 'Jane Doe',
+        name: onboardingData?.fullName || 'Jane Doe',
         email: 'jane.doe@gymflow.test',
         role: 'member' as const,
         must_change_password: false,
+        fitness_goal: onboardingData?.fitnessGoal || 'build_muscle',
       };
-      setAuthToken('dev-offline-token-gymflow');
-      navigation.navigate('ProfileSetup', { token: 'dev-offline-token-gymflow', user: fallbackUser, isGoogleAuth: true, autofill: true });
+      await setAuth('dev-offline-token-gymflow', fallbackUser, false);
+    } finally {
+      setIsSubmitting(false);
+      setSubmittingProvider(null);
+    }
+  };
+
+  const handleDevBypass = async () => {
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const response = await apiClient.post(
+        '/api/v1/auth/login',
+        {
+          email: 'jane.doe@gymflow.test',
+          password: 'Password123!',
+        },
+        { timeout: 2500 }
+      );
+
+      const { token, user } = response.data;
+      const resolvedUser = {
+        ...user,
+        ...(onboardingData?.fitnessGoal ? { fitness_goal: onboardingData.fitnessGoal } : {}),
+      };
+      await syncOnboardingProfile();
+      await setAuth(token, resolvedUser, false);
+    } catch {
+      useDevMockStore.getState().setMockEnabled(true);
+      const fallbackUser = {
+        id: 1,
+        name: onboardingData?.fullName || 'Jane Doe',
+        email: 'jane.doe@gymflow.test',
+        role: 'member' as const,
+        must_change_password: false,
+        fitness_goal: onboardingData?.fitnessGoal || 'build_muscle',
+      };
+      await setAuth('dev-offline-token-gymflow', fallbackUser, false);
     } finally {
       setIsSubmitting(false);
     }
@@ -181,19 +372,32 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       );
 
       const { token, user } = response.data;
-      await setAuth(token, user, false);
+      const resolvedUser = {
+        ...user,
+        ...(onboardingData?.fitnessGoal ? { fitness_goal: onboardingData.fitnessGoal } : {}),
+      };
+      await setAuth(token, resolvedUser, false);
     } catch {
       useDevMockStore.getState().setMockEnabled(true);
       const fallbackUser = {
         id: 1,
-        name: 'Jane Doe',
+        name: onboardingData?.fullName || 'Jane Doe',
         email: 'jane.doe@gymflow.test',
         role: 'member' as const,
         must_change_password: false,
+        fitness_goal: onboardingData?.fitnessGoal || 'build_muscle',
       };
       await setAuth('dev-offline-token-gymflow', fallbackUser, false);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Welcome');
     }
   };
 
@@ -206,8 +410,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           resizeMode="cover"
         />
         <SafeAreaView style={{ flex: 1, padding: spacing.xl, paddingBottom: spacing.xxl }}>
-          {/* Top Dev Mode Quick Pill */}
+          {/* Top Row: Back button & Dev Mode Quick Pill */}
           <View style={styles.topDevRow}>
+            <TouchableOpacity
+              onPress={handleBack}
+              style={styles.backButtonLanding}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <ArrowLeft size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={handleDevDirectHome}
               disabled={isSubmitting}
@@ -225,6 +438,37 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           <View style={{ flex: 1 }} />
 
           <View style={{ width: '100%' }}>
+            {/* If coming from Onboarding with generated plan, show prominent unlock card */}
+            {generatedPlan ? (
+              <View style={styles.onboardingWelcomeCard}>
+                <View style={styles.onboardingCheckIcon}>
+                  <Sparkles size={18} color="#CCFF00" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.onboardingWelcomeTitle}>
+                    {generatedPlan.title}
+                  </Text>
+                  <Text style={styles.onboardingWelcomeSub}>
+                    {onboardingData?.firstName ? `Welcome, ${onboardingData.firstName}! ` : ''}Sign in to unlock your custom workout plan.
+                  </Text>
+                </View>
+              </View>
+            ) : onboardingData?.firstName ? (
+              <View style={styles.onboardingWelcomeCard}>
+                <View style={styles.onboardingCheckIcon}>
+                  <CheckCircle2 size={18} color="#CCFF00" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.onboardingWelcomeTitle}>
+                    Welcome, {onboardingData.firstName}!
+                  </Text>
+                  <Text style={styles.onboardingWelcomeSub}>
+                    {isSignUp ? 'Create your login to save your profile' : 'Sign in to access your workout plan'}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
             {errorMessage ? (
               <View style={[styles.errorBanner, { marginBottom: spacing.md }]}>
                 <AlertCircle size={18} color={colors.error} />
@@ -232,33 +476,72 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               </View>
             ) : null}
 
-            {/* Single Google Sign-In Button */}
+            {/* Apple Sign-In Button */}
+            <TouchableOpacity
+              style={styles.appleButton}
+              onPress={handleAppleLogin}
+              disabled={isSubmitting}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={isSignUp ? 'Sign up with Apple' : 'Sign in with Apple'}
+            >
+              {isSubmitting && submittingProvider === 'apple' ? (
+                <ActivityIndicator size="small" color="#000000" />
+              ) : (
+                <View style={styles.appleButtonContent}>
+                  <AppleIcon size={21} color="#000000" />
+                  <Text style={styles.appleButtonText}>
+                    {isSignUp ? 'Sign up with Apple' : 'Sign in with Apple'}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Google Sign-In Button */}
             <TouchableOpacity
               style={styles.googleButton}
               onPress={handleGoogleLogin}
               disabled={isSubmitting}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Sign in with Google"
+              accessibilityLabel={isSignUp ? 'Sign up with Google' : 'Sign in with Google'}
             >
-              {isSubmitting ? (
+              {isSubmitting && submittingProvider === 'google' ? (
                 <ActivityIndicator size="small" color="#1F1F1F" />
               ) : (
                 <View style={styles.googleButtonContent}>
                   <GoogleIcon size={22} />
-                  <Text style={styles.googleButtonText}>Sign in with Google</Text>
+                  <Text style={styles.googleButtonText}>
+                    {isSignUp ? 'Sign up with Google' : 'Sign in with Google'}
+                  </Text>
                 </View>
               )}
             </TouchableOpacity>
 
-            {/* Secondary Option */}
+            {/* Secondary Option: Email */}
             <TouchableOpacity
               onPress={() => setShowEmailForm(true)}
               style={styles.emailOptionButton}
               accessibilityRole="button"
-              accessibilityLabel="Sign in with email instead"
+              accessibilityLabel={isSignUp ? 'Sign up with email instead' : 'Sign in with email instead'}
             >
-              <Text style={styles.emailOptionText}>Or sign in with email</Text>
+              <Text style={styles.emailOptionText}>
+                {isSignUp ? 'Or sign up with email' : 'Or sign in with email'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Toggle Mode: Sign In vs Sign Up */}
+            <TouchableOpacity
+              onPress={() => setIsSignUp(!isSignUp)}
+              style={styles.toggleModeButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.toggleModeText}>
+                {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+                <Text style={styles.toggleModeHighlight}>
+                  {isSignUp ? 'Sign In' : 'Sign Up'}
+                </Text>
+              </Text>
             </TouchableOpacity>
 
             {/* Dev Mode Autofill Bypass Button */}
@@ -268,10 +551,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               style={styles.devBypassButton}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Dev Mode: Autofill Profile Setup"
+              accessibilityLabel="Dev Mode: Quick Member Sign In"
             >
               <Zap size={14} color="#CCFF00" style={{ marginRight: 6 }} />
-              <Text style={styles.devBypassButtonText}>Dev Mode: Autofill Profile Setup</Text>
+              <Text style={styles.devBypassButtonText}>Dev Mode: Quick Member Sign In</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -302,6 +585,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               <Text style={styles.formDevBadgeText}>DEV SKIP</Text>
             </TouchableOpacity>
           </View>
+
           {/* Brand Header */}
           <View style={styles.brandContainer}>
             <View style={styles.brandIconWrapper}>
@@ -313,8 +597,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
           {/* Form */}
           <View style={styles.formCard}>
-            <Text style={styles.formTitle}>Welcome Back</Text>
-            <Text style={styles.formSubtitle}>Sign in to your member account</Text>
+            <Text style={styles.formTitle}>
+              {isSignUp ? 'Create Account' : 'Welcome Back'}
+            </Text>
+            <Text style={styles.formSubtitle}>
+              {isSignUp ? 'Set up your credentials to get started' : 'Sign in to your member account'}
+            </Text>
 
             {errorMessage ? (
               <View style={styles.errorBanner} accessibilityRole="alert">
@@ -379,30 +667,48 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               ) : null}
             </View>
 
-            {/* Forgot Password Link */}
-            <TouchableOpacity
-              style={styles.forgotButton}
-              onPress={() => navigation.navigate('ForgotPassword')}
-              accessibilityRole="button"
-              accessibilityLabel="Forgot Password"
-            >
-              <Text style={styles.forgotText}>Forgot password?</Text>
-            </TouchableOpacity>
+            {/* Forgot Password Link (Only in Sign In mode) */}
+            {!isSignUp ? (
+              <TouchableOpacity
+                style={styles.forgotButton}
+                onPress={() => navigation.navigate('ForgotPassword')}
+                accessibilityRole="button"
+                accessibilityLabel="Forgot Password"
+              >
+                <Text style={styles.forgotText}>Forgot password?</Text>
+              </TouchableOpacity>
+            ) : null}
 
-            {/* Sign In Button */}
+            {/* Submit Button */}
             <TouchableOpacity
               style={styles.submitButton}
               onPress={handleSubmit(onSubmit)}
               disabled={isSubmitting}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Sign In"
+              accessibilityLabel={isSignUp ? 'Create Account' : 'Sign In'}
             >
               {isSubmitting ? (
                 <ActivityIndicator color={colors.textInverse} />
               ) : (
-                <Text style={styles.submitButtonText}>Sign In</Text>
+                <Text style={styles.submitButtonText}>
+                  {isSignUp ? 'Create Account' : 'Sign In'}
+                </Text>
               )}
+            </TouchableOpacity>
+
+            {/* Toggle Sign In / Sign Up */}
+            <TouchableOpacity
+              onPress={() => setIsSignUp(!isSignUp)}
+              style={styles.formToggleBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.formToggleText}>
+                {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+                <Text style={{ color: colors.primary, fontWeight: '700' }}>
+                  {isSignUp ? 'Sign In' : 'Sign Up'}
+                </Text>
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -461,39 +767,41 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.headingBold,
     fontSize: typography.sizes.xxl,
     color: colors.text,
+    marginBottom: spacing.xs,
   },
   formSubtitle: {
     fontSize: typography.sizes.sm,
     color: colors.textSecondary,
-    marginTop: 4,
     marginBottom: spacing.lg,
   },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.errorMuted,
+    backgroundColor: 'rgba(255, 59, 48, 0.12)',
     borderWidth: 1,
-    borderColor: colors.error,
+    borderColor: 'rgba(255, 59, 48, 0.35)',
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     marginBottom: spacing.md,
+    gap: spacing.sm,
   },
   errorText: {
-    color: colors.text,
+    color: colors.error,
     fontSize: typography.sizes.sm,
-    marginLeft: spacing.sm,
     flex: 1,
   },
   fieldWrapper: {
-    marginBottom: 10,
+    marginBottom: spacing.md,
   },
   label: {
     fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.headingBold,
+    fontWeight: '700',
     color: colors.textSecondary,
-    marginBottom: spacing.xs,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontWeight: '600',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -503,7 +811,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
-    minHeight: 48,
+    height: 48,
   },
   inputError: {
     borderColor: colors.error,
@@ -515,7 +823,6 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontSize: typography.sizes.base,
-    minHeight: 44,
   },
   fieldError: {
     color: colors.error,
@@ -524,40 +831,65 @@ const styles = StyleSheet.create({
   },
   forgotButton: {
     alignSelf: 'flex-end',
-    minHeight: 44, // 44px tap target
-    justifyContent: 'center',
-    paddingVertical: spacing.xs,
+    marginBottom: spacing.lg,
   },
   forgotText: {
     color: colors.primary,
     fontSize: typography.sizes.sm,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   submitButton: {
     backgroundColor: colors.primary,
-    minHeight: 52, // 52px tap target
     borderRadius: borderRadius.md,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
   },
   submitButtonText: {
     color: colors.textInverse,
+    fontFamily: typography.fonts.headingBold,
     fontSize: typography.sizes.base,
-    fontWeight: '700',
+    letterSpacing: 0.3,
   },
-  googleButton: {
+  formToggleBtn: {
+    marginTop: spacing.lg,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  formToggleText: {
+    color: colors.textSecondary,
+    fontSize: typography.sizes.sm,
+  },
+  appleButton: {
     backgroundColor: '#FFFFFF',
-    minHeight: 52,
     borderRadius: borderRadius.md,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    width: '100%',
+  },
+  appleButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appleButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontFamily: typography.fonts.headingBold,
+    marginLeft: spacing.sm,
+    letterSpacing: 0.2,
+  },
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: borderRadius.md,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+    width: '100%',
   },
   googleButtonContent: {
     flexDirection: 'row',
@@ -566,25 +898,52 @@ const styles = StyleSheet.create({
   },
   googleButtonText: {
     color: '#1F1F1F',
-    fontSize: typography.sizes.base,
-    fontWeight: '600',
-    fontFamily: typography.fonts.headingMedium,
-    marginLeft: 12,
+    fontSize: 16,
+    fontFamily: typography.fonts.headingBold,
+    marginLeft: spacing.sm,
+    letterSpacing: 0.2,
   },
   emailOptionButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+    marginTop: spacing.xs,
   },
   emailOptionText: {
     color: 'rgba(255, 255, 255, 0.65)',
     fontSize: typography.sizes.sm,
     fontWeight: '500',
   },
+  toggleModeButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  toggleModeText: {
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: typography.sizes.sm,
+  },
+  toggleModeHighlight: {
+    color: colors.primary,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
   topDevRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     width: '100%',
+  },
+  backButtonLanding: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   topDevBadge: {
     flexDirection: 'row',
@@ -635,5 +994,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: typography.fonts.headingBold,
     letterSpacing: 0.6,
+  },
+  onboardingWelcomeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.3)',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  onboardingCheckIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(204, 255, 0, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onboardingWelcomeTitle: {
+    color: '#FFFFFF',
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.headingBold,
+  },
+  onboardingWelcomeSub: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: typography.sizes.xs,
+    marginTop: 2,
   },
 });
