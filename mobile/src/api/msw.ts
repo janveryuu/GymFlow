@@ -3,13 +3,9 @@ import { server } from '@handlers/server';
 
 /**
  * Initializes the MSW mock API layer in React Native runtime.
- * Strictly gated behind __DEV__.
+ * Allows frontend standalone demonstration with full realistic mock data.
  */
 export async function initMocks(): Promise<void> {
-  if (!__DEV__) {
-    return;
-  }
-
   const isMockEnabled = useDevMockStore.getState().isMockEnabled;
   if (!isMockEnabled) {
     console.log('[MSW] In-app mock mode is DISABLED. Using live network.');
