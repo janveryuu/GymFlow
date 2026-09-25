@@ -1,0 +1,14 @@
+{
+  "name": "gymflow-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GymFlow — Offline-First Member-Facing Fitness Companion",
+  "scripts": {
+    "backend": "cd backend && php artisan serve",
+    "mobile": "cd mobile && npm start",
+    "mobile:web": "cd mobile && npm run web",
+    "mobile:android": "cd mobile && npm run android",
+    "test:backend": "cd backend && php artisan test",
+    "test:mobile": "cd mobile && npm test"
+  }
+}

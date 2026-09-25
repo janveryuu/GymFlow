@@ -14,7 +14,7 @@ import {
   Dimensions,
   Easing,
 } from 'react-native';
-import { ArrowLeft, Zap, ZapOff, ScanBarcode } from 'lucide-react-native';
+import { ArrowLeft, Zap, ZapOff } from 'lucide-react-native';
 import { colors, typography, borderRadius } from '../../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -27,8 +27,6 @@ export interface ScannerOverlayProps {
   torchOn: boolean;
   onToggleTorch: () => void;
   onClose: () => void;
-  onUploadImage?: () => void;
-  onOpenManual?: () => void;
   title?: string;
 }
 
@@ -36,8 +34,6 @@ export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({
   torchOn,
   onToggleTorch,
   onClose,
-  onUploadImage,
-  onOpenManual,
   title = 'Barcode Scanner',
 }) => {
   // Laser vertical sweep animation value: 0 -> VIEWFINDER_HEIGHT
@@ -80,10 +76,6 @@ export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({
 
         <View style={styles.titleContainer}>
           <Text style={styles.titleText}>{title}</Text>
-          <View style={styles.activePill}>
-            <View style={styles.activeDot} />
-            <Text style={styles.activeText}>TARGETING</Text>
-          </View>
         </View>
 
         <TouchableOpacity
@@ -125,40 +117,10 @@ export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({
             <View style={styles.laserGlow} />
           </Animated.View>
         </View>
-
-        {/* Guidance Prompt */}
-        <View style={styles.promptContainer}>
-          <ScanBarcode color={colors.primary} size={18} style={{ marginRight: 6 }} />
-          <Text style={styles.promptText}>
-            Fit UPC-A, EAN-13, or EAN-8 barcode inside frame
-          </Text>
-        </View>
       </View>
 
-      {/* Bottom Actions Bar (Upload Image for Localhost & Manual Presets) */}
-      <View style={styles.bottomBar} pointerEvents="box-none">
-        <View style={styles.actionRow} pointerEvents="box-none">
-          {onUploadImage && (
-            <TouchableOpacity
-              style={styles.uploadActionButton}
-              onPress={onUploadImage}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.uploadActionText}>📁 Upload Image</Text>
-            </TouchableOpacity>
-          )}
-
-          {onOpenManual && (
-            <TouchableOpacity
-              style={styles.manualActionButton}
-              onPress={onOpenManual}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.manualActionText}>⚡ Test Barcodes</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
+      {/* Bottom Attribution */}
+      <View style={styles.bottomBar} pointerEvents="none">
         <Text style={styles.databaseFooter}>Powered by Open Food Facts (Free & Open Source)</Text>
       </View>
     </View>
@@ -181,36 +143,13 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
   },
   titleText: {
     fontSize: typography.sizes.base,
     fontFamily: typography.fonts.headingBold,
     color: colors.text,
     letterSpacing: 0.3,
-  },
-  activePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(48, 209, 88, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(48, 209, 88, 0.3)',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 4,
-  },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.success,
-    marginRight: 5,
-  },
-  activeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.success,
-    letterSpacing: 0.8,
   },
   circleButton: {
     width: 44,
@@ -305,62 +244,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cyan,
     opacity: 0.45,
   },
-  promptContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(18, 18, 20, 0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    marginTop: 24,
-    maxWidth: SCREEN_WIDTH - 48,
-  },
-  promptText: {
-    fontSize: typography.sizes.xs,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
   bottomBar: {
     paddingBottom: 28,
     alignItems: 'center',
-    gap: 12,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 20,
-  },
-  uploadActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(18, 18, 20, 0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: borderRadius.full,
-  },
-  uploadActionText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-  },
-  manualActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 214, 0, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 214, 0, 0.35)',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: borderRadius.full,
-  },
-  manualActionText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.yellow,
   },
   databaseFooter: {
     fontSize: typography.sizes.xs,
@@ -368,4 +254,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 });
-

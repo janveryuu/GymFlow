@@ -52,4 +52,10 @@ declare module 'expo-camera' {
     CameraPermissionResponse | null,
     () => Promise<CameraPermissionResponse>
   ];
+
+  export function scanFromURLAsync(
+    url: string,
+    barcodeTypes?: BarcodeType[]
+  ): Promise<BarcodeScanningResult[]>;
 }
+

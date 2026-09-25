@@ -217,10 +217,8 @@ export function calculateMacroPercentages(macros: MacroNutrientValues): MacroRat
  */
 export function isValidFoodBarcode(barcode: string): boolean {
   if (!barcode || typeof barcode !== 'string') return false;
-  const trimmed = barcode.trim();
-  if (!/^\d{6,14}$/.test(trimmed)) return false;
-  const len = trimmed.length;
-  return len === 8 || len === 12 || len === 13 || len === 14 || len === 6;
+  const cleaned = barcode.trim().replace(/[-\s]/g, '');
+  return /^\d{6,14}$/.test(cleaned);
 }
 
 /**

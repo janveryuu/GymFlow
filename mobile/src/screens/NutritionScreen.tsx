@@ -5,13 +5,14 @@ import {
   Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
-import { ArrowLeft, ScanBarcode, Camera, PenLine, Trash2, X, Lock, RotateCcw } from 'lucide-react-native';
+import { ArrowLeft, ScanBarcode, Camera, PenLine, Trash2, X, Lock, RotateCcw, Image, ChevronRight } from 'lucide-react-native';
 import { colors, typography, borderRadius } from '../theme';
 import { getDatabase } from '../db/connection';
 import { PercentRing } from '../components/PercentRing';
 import { useAuthStore } from '../store/authStore';
 import { calculateDailyCalorieTarget } from '../utils/nutritionCalculator';
 import * as Crypto from 'expo-crypto';
+import * as ImagePicker from 'expo-image-picker';
 
 // ---------------------------------------------------------------------------
 // Architecture decision: entries are grouped by meal type (Breakfast / Lunch /
@@ -58,6 +59,7 @@ export const NutritionScreen: React.FC = () => {
   const [dailyTarget,    setDailyTarget]    = useState(DEFAULT_TARGET);
   const [isLoading,      setIsLoading]      = useState(true);
   const [showManual,     setShowManual]     = useState(false);
+  const [showBarcodeChoiceModal, setShowBarcodeChoiceModal] = useState(false);
 
   // Manual entry form state
   const [mFoodName, setMFoodName] = useState('');
@@ -389,7 +391,7 @@ export const NutritionScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => navigation.navigate('BarcodeScannerScreen')}
+            onPress={() => setShowBarcodeChoiceModal(true)}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Barcode"
@@ -558,6 +560,117 @@ export const NutritionScreen: React.FC = () => {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Barcode Choice Modal: Camera or Upload Images */}
+      <Modal
+        visible={showBarcodeChoiceModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowBarcodeChoiceModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.choiceModalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowBarcodeChoiceModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.choiceModalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.choiceDragHandle} />
+            <View style={styles.choiceModalHeader}>
+              <View>
+                <Text style={styles.choiceModalTitle}>Barcode Scanner</Text>
+                <Text style={styles.choiceModalSubtitle}>
+                  Choose how you want to scan your item
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowBarcodeChoiceModal(false)}
+                style={styles.choiceCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <X color={colors.textMuted} size={18} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.choiceCardsContainer}>
+              {/* Option 1: Camera */}
+              <TouchableOpacity
+                style={styles.choiceCard}
+                onPress={() => {
+                  setShowBarcodeChoiceModal(false);
+                  navigation.navigate('BarcodeScannerScreen', { mode: 'camera' });
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Camera"
+              >
+                <View style={styles.choiceIconBox}>
+                  <Camera color="#CCFF00" size={24} strokeWidth={2.2} />
+                </View>
+                <View style={styles.choiceTextContainer}>
+                  <Text style={styles.choiceCardTitle}>Camera</Text>
+                  <Text style={styles.choiceCardDesc}>
+                    Scan food barcode in real-time with device camera
+                  </Text>
+                </View>
+                <ChevronRight color={colors.textMuted} size={20} />
+              </TouchableOpacity>
+
+              {/* Option 2: Upload Images */}
+              <TouchableOpacity
+                style={styles.choiceCard}
+                onPress={async () => {
+                  setShowBarcodeChoiceModal(false);
+                  try {
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                      mediaTypes: ['images'],
+                      allowsEditing: false,
+                      quality: 1,
+                    });
+                    if (result.canceled || !result.assets[0]?.uri) {
+                      return;
+                    }
+                    navigation.navigate('BarcodeScannerScreen', {
+                      mode: 'upload',
+                      initialImageUri: result.assets[0].uri,
+                    });
+                  } catch (err) {
+                    console.warn('[NutritionScreen] Image picker error:', err);
+                  }
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Upload Images"
+              >
+                <View style={[styles.choiceIconBox, styles.choiceIconBoxPhoto]}>
+                  <Image color="#60A5FA" size={24} strokeWidth={2.2} />
+                </View>
+                <View style={styles.choiceTextContainer}>
+                  <Text style={styles.choiceCardTitle}>Upload Images</Text>
+                  <Text style={styles.choiceCardDesc}>
+                    Select a photo or screenshot from your library
+                  </Text>
+                </View>
+                <ChevronRight color={colors.textMuted} size={20} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.choiceCancelBtn}
+              onPress={() => setShowBarcodeChoiceModal(false)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={styles.choiceCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
@@ -880,5 +993,107 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     fontFamily: typography.fonts.body,
+  },
+
+  // Barcode Choice Modal Styles
+  choiceModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  choiceModalContent: {
+    backgroundColor: '#161616',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderBottomWidth: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  choiceDragHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  choiceModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  choiceModalTitle: {
+    fontSize: 20,
+    fontFamily: typography.fonts.headingBold,
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  choiceModalSubtitle: {
+    fontSize: 13,
+    color: '#8E8E93',
+  },
+  choiceCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#222222',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choiceCardsContainer: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  choiceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E1E20',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    padding: 16,
+  },
+  choiceIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  choiceIconBoxPhoto: {
+    backgroundColor: 'rgba(96, 165, 250, 0.12)',
+  },
+  choiceTextContainer: {
+    flex: 1,
+  },
+  choiceCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 3,
+  },
+  choiceCardDesc: {
+    fontSize: 12,
+    color: '#8E8E93',
+    lineHeight: 16,
+  },
+  choiceCancelBtn: {
+    marginTop: 4,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#222222',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choiceCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#E5E5E5',
   },
 });

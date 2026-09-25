@@ -10,5 +10,4 @@ export * from './useBarcodeScanner';
 export * from './components/ScannerOverlay';
 export * from './components/ScannerFeedbackView';
 export * from './components/MacroBottomSheet';
-export * from './components/LocalhostImageModal';
 export * from './imageBarcodeScanner';

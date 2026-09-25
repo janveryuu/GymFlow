@@ -36,7 +36,6 @@ export interface ScannerFeedbackViewProps {
   onEnterManually?: () => void;
   onRequestPermission?: () => void;
   onUploadImage?: () => void;
-  onOpenManual?: () => void;
   onClose: () => void;
 }
 
@@ -48,7 +47,6 @@ export const ScannerFeedbackView: React.FC<ScannerFeedbackViewProps> = ({
   onEnterManually,
   onRequestPermission,
   onUploadImage,
-  onOpenManual,
   onClose,
 }) => {
   // 1. Permission Denied View
@@ -70,19 +68,13 @@ export const ScannerFeedbackView: React.FC<ScannerFeedbackViewProps> = ({
 
           <Text style={styles.title}>Camera Access Required</Text>
           <Text style={styles.description}>
-            No camera feed is available in this environment. You can upload an image of a barcode or select from test barcodes.
+            No camera feed is available in this environment. You can upload an image of a barcode.
           </Text>
 
           <View style={styles.actionContainer}>
             {onUploadImage && (
               <TouchableOpacity style={styles.primaryButton} onPress={onUploadImage}>
                 <Text style={styles.primaryButtonText}>📁 Upload Barcode Image</Text>
-              </TouchableOpacity>
-            )}
-
-            {onOpenManual && (
-              <TouchableOpacity style={styles.secondaryButton} onPress={onOpenManual}>
-                <Text style={styles.secondaryButtonText}>⚡ Test Sample Barcodes</Text>
               </TouchableOpacity>
             )}
 

@@ -19,6 +19,7 @@ export interface CustomExerciseItem {
 export interface CustomRoutineWorkout extends MergedWorkout {
   isCustomRoutine: boolean;
   routineExercises: CustomExerciseItem[];
+  created_at?: string;
 }
 
 const DEFAULT_LEG_DAY_EXERCISES: CustomExerciseItem[] = [
@@ -84,13 +85,16 @@ const INITIAL_CUSTOM_ROUTINES: CustomRoutineWorkout[] = [];
 
 interface CustomWorkoutsState {
   customWorkouts: CustomRoutineWorkout[];
+  pendingGeneratedWorkout: CustomRoutineWorkout | null;
   addCustomWorkout: (workout: CustomRoutineWorkout) => void;
   removeCustomWorkout: (id: string) => void;
   getCustomWorkoutById: (id: string) => CustomRoutineWorkout | undefined;
+  setPendingGeneratedWorkout: (workout: CustomRoutineWorkout | null) => void;
 }
 
 export const useCustomWorkoutsStore = create<CustomWorkoutsState>((set, get) => ({
   customWorkouts: INITIAL_CUSTOM_ROUTINES,
+  pendingGeneratedWorkout: null,
   addCustomWorkout: (workout) =>
     set((state) => ({
       customWorkouts: [workout, ...state.customWorkouts.filter((w) => w.id !== workout.id)],
@@ -102,4 +106,6 @@ export const useCustomWorkoutsStore = create<CustomWorkoutsState>((set, get) => 
   getCustomWorkoutById: (id: string) => {
     return get().customWorkouts.find((w) => w.id === id);
   },
+  setPendingGeneratedWorkout: (workout) => set({ pendingGeneratedWorkout: workout }),
 }));
+

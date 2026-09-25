@@ -49,12 +49,12 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions = {}) {
     }
   }, [autoRequestPermission, permission, requestPermission]);
 
-  // Sync phase with permission state
+  // Sync phase with permission state only when camera permission is actively used
   useEffect(() => {
-    if (permission && !permission.granted && !permission.canAskAgain) {
+    if (autoRequestPermission && permission && !permission.granted && !permission.canAskAgain) {
       setPhase('permission_denied');
     }
-  }, [permission]);
+  }, [autoRequestPermission, permission]);
 
   const toggleTorch = useCallback(() => {
     setTorch((prev) => !prev);

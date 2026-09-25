@@ -127,5 +127,71 @@ describe('nutritionCalculator', () => {
       expect(result.goalAdjustmentPercentage).toBe(0);
       expect(Math.abs(result.targetCalories - result.tdee)).toBeLessThanOrEqual(25);
     });
+
+    it('calculates bulking with custom +300 and +500 calorie adjustment', () => {
+      const baseInput = {
+        weightKg: 75,
+        heightCm: 178,
+        gender: 'male' as const,
+        age: 24,
+        fitnessGoal: 'bulk',
+      };
+
+      const result300 = calculateDailyCalorieTarget({
+        ...baseInput,
+        calorieAdjustment: 300,
+      });
+      // TDEE is 2535. +300 = 2835 -> rounded to nearest 50 = 2850
+      expect(result300.targetCalories).toBe(2850);
+      expect(result300.macros.proteinGrams).toBe(150);
+
+      const result500 = calculateDailyCalorieTarget({
+        ...baseInput,
+        calorieAdjustment: 500,
+      });
+      // TDEE is 2535. +500 = 3035 -> rounded to nearest 50 = 3050
+      expect(result500.targetCalories).toBe(3050);
+      expect(result500.macros.proteinGrams).toBe(150);
+    });
+
+    it('calculates cutting with custom -300 and -500 calorie adjustment', () => {
+      const baseInput = {
+        weightKg: 75,
+        heightCm: 178,
+        gender: 'male' as const,
+        age: 24,
+        fitnessGoal: 'cut',
+      };
+
+      const resultMinus300 = calculateDailyCalorieTarget({
+        ...baseInput,
+        calorieAdjustment: -300,
+      });
+      // TDEE is 2535. -300 = 2235 -> rounded to nearest 50 = 2250
+      expect(resultMinus300.targetCalories).toBe(2250);
+      expect(resultMinus300.macros.proteinGrams).toBe(165); // 75kg * 2.2g/kg
+
+      const resultMinus500 = calculateDailyCalorieTarget({
+        ...baseInput,
+        calorieAdjustment: -500,
+      });
+      // TDEE is 2535. -500 = 2035 -> rounded to nearest 50 = 2050
+      expect(resultMinus500.targetCalories).toBe(2050);
+      expect(resultMinus500.macros.proteinGrams).toBe(165);
+    });
+
+    it('calculates maintain goal at 100% of TDEE with 0 adjustment', () => {
+      const result = calculateDailyCalorieTarget({
+        weightKg: 70,
+        heightCm: 175,
+        gender: 'male' as const,
+        age: 26,
+        fitnessGoal: 'maintain',
+        calorieAdjustment: 0,
+      });
+
+      expect(Math.abs(result.targetCalories - result.tdee)).toBeLessThanOrEqual(25);
+    });
   });
 });
+

@@ -18,7 +18,6 @@ import {
   Zap,
   Sparkles,
   Bot,
-  Lock,
   CheckCircle2,
   Calendar,
   Dumbbell,
@@ -30,6 +29,9 @@ import {
 import * as Haptics from 'expo-haptics';
 import { colors, typography, borderRadius, spacing } from '../../theme';
 import { FloatingLabelInput } from '../../components/FloatingLabelInput';
+import { useCustomWorkoutsStore, CustomRoutineWorkout, CustomExerciseItem } from '../../store/customWorkoutsStore';
+import { useAuthStore } from '../../store/authStore';
+import { useDevMockStore } from '../../store/devMockStore';
 
 interface OnboardingScreenProps {
   route?: {
@@ -168,14 +170,31 @@ const FITNESS_GOAL_OPTIONS = [
   },
 ];
 
+const GENERATE_WORKOUT_OPTIONS = [
+  {
+    id: 'yes',
+    title: 'Generate me a personalized workout',
+    subtitle: 'Recommended • GymFlow AI Powered',
+    desc: 'Our AI engine will calibrate your exercises, sets, reps, and weekly volume tailored to your body type, goals, and training frequency.',
+    badge: 'RECOMMENDED',
+  },
+  {
+    id: 'no',
+    title: 'No (for experienced lifters)',
+    subtitle: 'Self-Guided & Custom Routines',
+    desc: 'I already have my own workout split and know what I want to train. Take me straight to the app without generating an AI routine.',
+    badge: 'SELF-GUIDED',
+  },
+];
+
 export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navigation }) => {
   const isAutofill = Boolean(route?.params?.autofill);
 
-  // 1 to 6: Question steps
-  // 7: Agentic Loading Screen
-  // 8: "Your Plan is Ready" Blurred Screen
+  // 1 to 7: Question steps
+  // 8: Agentic Loading Screen
+  // 9: "Your Plan is Ready" Blurred Screen
   const [currentStep, setCurrentStep] = useState(1);
-  const totalQuestionSteps = 6;
+  const totalQuestionSteps = 7;
 
   // Step 1: Names
   const [firstName, setFirstName] = useState(isAutofill ? 'Jane' : '');
@@ -203,6 +222,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
   const [fitnessGoal, setFitnessGoal] = useState<string>(isAutofill ? 'build_muscle' : '');
   const [fitnessGoalError, setFitnessGoalError] = useState(false);
 
+  // Step 7: Personalized Workout Preference ('yes' | 'no')
+  const [generateWorkoutPreference, setGenerateWorkoutPreference] = useState<string>(isAutofill ? 'yes' : '');
+  const [generateWorkoutPreferenceError, setGenerateWorkoutPreferenceError] = useState(false);
+
   // General error state & shake
   const [shakeTrigger, setShakeTrigger] = useState(0);
   const [globalError, setGlobalError] = useState('');
@@ -227,7 +250,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
 
   // Agentic Loading spinner, dots & step sequencing
   useEffect(() => {
-    if (currentStep === 7) {
+    if (currentStep === 8) {
       // Continuous rotating spinner for active step
       const spinLoop = Animated.loop(
         Animated.timing(spinAnim, {
@@ -260,7 +283,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             Animated.timing(dotAnim3, { toValue: 1, duration: 250, useNativeDriver: Platform.OS !== 'web' }),
           ]),
         ]).start(() => {
-          if (isMounted && currentStep === 7) {
+          if (isMounted && currentStep === 8) {
             animateDots();
           }
         });
@@ -284,8 +307,8 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
           } catch {
             // Ignore
           }
-          // Transition smoothly into Step 8 ("Your Plan is Ready")
-          transitionToStep(8, 'forward');
+          // Proceed directly to homescreen with generated workout!
+          proceedToHomeScreenWithGeneratedPlan();
         }, 4400)
       );
 
@@ -310,6 +333,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
     setDaysPerWeek('4');
     setTrainingType('hypertrophy');
     setFitnessGoal('build_muscle');
+    setGenerateWorkoutPreference('yes');
     setFirstNameError(false);
     setLastNameError(false);
     setBodyTypeError(false);
@@ -317,6 +341,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
     setDaysPerWeekError(false);
     setTrainingTypeError(false);
     setFitnessGoalError(false);
+    setGenerateWorkoutPreferenceError(false);
     setGlobalError('');
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -340,6 +365,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
     setDaysPerWeekError(false);
     setTrainingTypeError(false);
     setFitnessGoalError(false);
+    setGenerateWorkoutPreferenceError(false);
     setGlobalError('');
 
     const exitOffset = direction === 'forward' ? -35 : 35;
@@ -448,7 +474,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
       return;
     }
 
-    // Step 6: Main Fitness Goal -> Start Agentic Synthesis!
+    // Step 6: Main Fitness Goal -> Proceed to Step 7 (Personalized Workout Question)
     if (currentStep === 6) {
       if (!fitnessGoal) {
         setFitnessGoalError(true);
@@ -457,23 +483,73 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
         return;
       }
       try {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch {
         // Ignore
       }
       transitionToStep(7, 'forward');
       return;
     }
+
+    // Step 7: Personalized Workout Preference
+    if (currentStep === 7) {
+      if (!generateWorkoutPreference) {
+        setGenerateWorkoutPreferenceError(true);
+        setShakeTrigger((p) => p + 1);
+        setGlobalError('Please choose whether you want GymFlow to generate a personalized workout.');
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        } catch {
+          // Ignore
+        }
+        return;
+      }
+
+      if (generateWorkoutPreference === 'yes') {
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        } catch {
+          // Ignore
+        }
+        transitionToStep(8, 'forward');
+      } else {
+        // 'no' (for experienced lifters) - proceed directly to login/signup without generated plan
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } catch {
+          // Ignore
+        }
+        handleSkipPlan();
+      }
+      return;
+    }
   };
 
   const handleBack = () => {
-    if (currentStep > 1 && currentStep <= 6) {
+    if (currentStep > 1 && currentStep <= 7) {
       transitionToStep(currentStep - 1, 'backward');
     } else if (currentStep === 1) {
       navigation.navigate('Welcome');
-    } else if (currentStep === 8) {
-      transitionToStep(6, 'backward');
     }
+  };
+
+  const handleSkipPlan = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
+      // Ignore
+    }
+
+    useDevMockStore.getState().setMockEnabled(true);
+    const memberUser = {
+      id: 1,
+      name: `${firstName.trim() || 'Jane'} ${lastName.trim() || 'Doe'}`,
+      email: `${(firstName.trim() || 'jane').toLowerCase()}@gymflow.test`,
+      role: 'member' as const,
+      must_change_password: false,
+      fitness_goal: fitnessGoal || 'build_muscle',
+    };
+    await useAuthStore.getState().setAuth('dev-offline-token-gymflow', memberUser, false);
   };
 
   const handleOptionSelect = (setter: (val: string) => void, val: string, errorClearer: (err: boolean) => void) => {
@@ -522,37 +598,128 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
 
   const planDetails = getGeneratedPlanDetails();
 
-  const handleUnlockPlan = () => {
+  const createCustomRoutineFromPlan = (): CustomRoutineWorkout => {
+    const workoutId = `plan-${Date.now()}`;
+    const exercises: CustomExerciseItem[] = [
+      {
+        id: `ex-${workoutId}-1`,
+        title: trainingType === 'calisthenics' ? 'Weighted Pull-Ups' : 'Barbell Back Squats',
+        slug: 'barbell-squat',
+        category: trainingType === 'calisthenics' ? 'Back' : 'Legs',
+        equipment: trainingType === 'calisthenics' ? 'Pull-Up Bar' : 'Barbell & Squat Rack',
+        difficulty: planDetails.difficulty,
+        preferredSets: 4,
+        preferredReps: '8 - 10 reps',
+        restTimeSeconds: 90,
+        tips: 'Brace your abdominal wall and control the eccentric tempo.',
+        duration_minutes: 15,
+        calories: 120,
+      },
+      {
+        id: `ex-${workoutId}-2`,
+        title: trainingType === 'powerlifting' ? 'Competition Bench Press' : 'Flat Barbell Bench Press',
+        slug: 'bench-press',
+        category: 'Chest',
+        equipment: 'Barbell & Bench',
+        difficulty: planDetails.difficulty,
+        preferredSets: 4,
+        preferredReps: '8 - 10 reps',
+        restTimeSeconds: 90,
+        tips: 'Retract shoulder blades and press with controlled tempo.',
+        duration_minutes: 15,
+        calories: 110,
+      },
+      {
+        id: `ex-${workoutId}-3`,
+        title: 'Barbell Bent-Over Row',
+        slug: 'bent-over-row',
+        category: 'Back',
+        equipment: 'Barbell',
+        difficulty: planDetails.difficulty,
+        preferredSets: 3,
+        preferredReps: '10 - 12 reps',
+        restTimeSeconds: 60,
+        tips: 'Hinge at the hips and pull towards the belly button.',
+        duration_minutes: 12,
+        calories: 95,
+      },
+      {
+        id: `ex-${workoutId}-4`,
+        title: 'Standing Overhead Press',
+        slug: 'overhead-press',
+        category: 'Shoulders',
+        equipment: 'Barbell',
+        difficulty: planDetails.difficulty,
+        preferredSets: 3,
+        preferredReps: '8 - 10 reps',
+        restTimeSeconds: 75,
+        tips: 'Squeeze glutes and press in a vertical path.',
+        duration_minutes: 10,
+        calories: 80,
+      },
+      {
+        id: `ex-${workoutId}-5`,
+        title: 'Romanian Deadlifts',
+        slug: 'deadlift',
+        category: 'Hamstrings',
+        equipment: 'Barbell',
+        difficulty: planDetails.difficulty,
+        preferredSets: 3,
+        preferredReps: '10 - 12 reps',
+        restTimeSeconds: 60,
+        tips: 'Hinge at hips with soft knees and stretch hamstrings.',
+        duration_minutes: 10,
+        calories: 85,
+      },
+    ];
+
+    return {
+      id: workoutId,
+      title: planDetails.splitName,
+      slug: `custom-plan-${Date.now()}`,
+      category: 'Personalized AI Routine',
+      difficulty: planDetails.difficulty,
+      duration_minutes: 50,
+      calories: planDetails.calories,
+      equipment: 'Full Gym Setup',
+      sets: exercises.reduce((sum, e) => sum + e.preferredSets, 0),
+      reps: 10,
+      sets_reps: `${exercises.length} Exercises`,
+      image_url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=800&auto=format&fit=crop',
+      description: `Personalized ${planDetails.daysPerWeek} split synthesized for ${firstName.trim() || 'you'} targeting ${planDetails.goal}.`,
+      completion_percentage: 0,
+      is_favorite: false,
+      source: 'local',
+      primaryMuscle: 'Full Body',
+      secondaryMuscles: ['Chest', 'Back', 'Legs', 'Shoulders'],
+      exerciseType: 'strength',
+      created_at: new Date().toISOString(),
+      isCustomRoutine: true,
+      routineExercises: exercises,
+    };
+  };
+
+  const proceedToHomeScreenWithGeneratedPlan = async () => {
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
       // Ignore
     }
 
-    const onboardingData = {
-      firstName: firstName.trim() || 'Jane',
-      lastName: lastName.trim() || 'Doe',
-      fullName: `${firstName.trim() || 'Jane'} ${lastName.trim() || 'Doe'}`,
-      bodyType,
-      fitnessLevel,
-      daysPerWeek,
-      trainingType,
-      fitnessGoal,
-    };
+    const customWorkout = createCustomRoutineFromPlan();
+    useCustomWorkoutsStore.getState().addCustomWorkout(customWorkout);
+    useCustomWorkoutsStore.getState().setPendingGeneratedWorkout(customWorkout);
+    useDevMockStore.getState().setMockEnabled(true);
 
-    const generatedPlan = {
-      title: planDetails.splitName,
-      daysPerWeek: planDetails.daysPerWeek,
-      difficulty: planDetails.difficulty,
-      goal: planDetails.goal,
-      calories: planDetails.calories,
+    const memberUser = {
+      id: 1,
+      name: `${firstName.trim() || 'Jane'} ${lastName.trim() || 'Doe'}`,
+      email: `${(firstName.trim() || 'jane').toLowerCase()}@gymflow.test`,
+      role: 'member' as const,
+      must_change_password: false,
+      fitness_goal: fitnessGoal || 'build_muscle',
     };
-
-    navigation.navigate('Login', {
-      onboardingData,
-      generatedPlan,
-      mode: 'signup',
-    });
+    await useAuthStore.getState().setAuth('dev-offline-token-gymflow', memberUser, false);
   };
 
   return (
@@ -562,7 +729,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {/* Top Header with Back button, Step Progress Bars, and Counter */}
-        {currentStep <= 6 && (
+        {currentStep <= 7 && (
           <View style={styles.header}>
             <TouchableOpacity
               onPress={handleBack}
@@ -598,14 +765,14 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
           style={styles.scrollContainer}
           contentContainerStyle={[
             styles.scrollContent,
-            (currentStep === 7 || currentStep === 8) && styles.centerScrollContent,
+            currentStep === 8 && styles.centerScrollContent,
           ]}
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View
             style={[
               styles.stepAnimatedWrapper,
-              (currentStep === 7 || currentStep === 8) && { justifyContent: 'center' },
+              currentStep === 8 && { justifyContent: 'center' },
               {
                 opacity: fadeAnim,
                 transform: [{ translateX: slideAnim }],
@@ -859,9 +1026,63 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             )}
 
             {/* ============================================================ */}
-            {/* STEP 7: AGENTIC AI SYNTHESIS LOADING SCREEN                 */}
+            {/* STEP 7: DO YOU WANT ME TO GENERATE A PERSONALIZED WORKOUT?  */}
             {/* ============================================================ */}
             {currentStep === 7 && (
+              <View style={styles.stepContainer}>
+                <View style={styles.headerBlock}>
+                  <Text style={styles.title}>Do you want me to generate you a personalized workout?</Text>
+                  <Text style={styles.subtitle}>
+                    Choose whether GymFlow AI should build a custom training protocol for you or if you prefer self-guided routines.
+                  </Text>
+                </View>
+
+                <View style={styles.optionsStack}>
+                  {GENERATE_WORKOUT_OPTIONS.map((item) => {
+                    const isSelected = generateWorkoutPreference === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[
+                          styles.selectableCard,
+                          styles.generationOptionCard,
+                          isSelected && styles.selectableCardActive,
+                          generateWorkoutPreferenceError && !generateWorkoutPreference && styles.selectableCardError,
+                        ]}
+                        onPress={() => handleOptionSelect(setGenerateWorkoutPreference, item.id, setGenerateWorkoutPreferenceError)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                          <View style={styles.optionHeaderRow}>
+                            <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
+                              {item.title}
+                            </Text>
+                            {item.badge && (
+                              <View style={[styles.optionBadgePill, item.id === 'yes' ? styles.optionBadgePillYes : styles.optionBadgePillNo]}>
+                                <Text style={[styles.optionBadgePillText, item.id === 'yes' ? styles.optionBadgePillTextYes : styles.optionBadgePillTextNo]}>
+                                  {item.badge}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.optionSubtitleText}>{item.subtitle}</Text>
+                          <Text style={styles.optionDescText}>{item.desc}</Text>
+                        </View>
+
+                        <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
+                          {isSelected && <View style={styles.radioInner} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* ============================================================ */}
+            {/* STEP 8: AGENTIC AI SYNTHESIS LOADING SCREEN                 */}
+            {/* ============================================================ */}
+            {currentStep === 8 && (
               <View style={styles.agenticContainer}>
                 {/* Header Block */}
                 <View style={styles.agenticHeaderBlock}>
@@ -959,104 +1180,11 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
                 </View>
               </View>
             )}
-
-            {/* ============================================================ */}
-            {/* STEP 8: "YOUR PLAN IS READY" (BLURRED PREVIEW SCREEN)        */}
-            {/* ============================================================ */}
-            {currentStep === 8 && (
-              <View style={styles.resultContainer}>
-                {/* Success Header */}
-                <View style={styles.readyHeader}>
-                  <Text style={styles.readyTitle}>Your Plan is Ready</Text>
-                  <Text style={styles.readySubtitle}>
-                    Tailored specifically for {firstName || 'you'} based on your {planDetails.bodyTypeLabel} profile.
-                  </Text>
-                </View>
-
-                {/* Plan Metadata Summary Card */}
-                <View style={styles.planCard}>
-                  <View style={styles.planCardHeader}>
-                    <Text style={styles.planSplitTitle}>{planDetails.splitName}</Text>
-                    <View style={styles.tagRow}>
-                      <View style={styles.tagBadge}>
-                        <Calendar size={11} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                        <Text style={styles.tagBadgeText}>{planDetails.daysPerWeek}</Text>
-                      </View>
-                      <View style={styles.tagBadge}>
-                        <Target size={11} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                        <Text style={styles.tagBadgeText}>{planDetails.goal}</Text>
-                      </View>
-                      <View style={styles.tagBadge}>
-                        <Flame size={11} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                        <Text style={styles.tagBadgeText}>~{planDetails.calories} kcal</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Workout Days Preview (Blurred Behind Lock) */}
-                  <View style={styles.workoutListWrapper}>
-                    {/* Simulated Routine Day Previews */}
-                    <View style={styles.routineDayItem}>
-                      <View style={styles.routineDayRow}>
-                        <Text style={styles.routineDayLabel}>DAY 1 • PUSH HYPERTROPHY</Text>
-                        <Text style={styles.routineDayDuration}>52 min</Text>
-                      </View>
-                      <Text style={styles.routineExerciseSnippet}>
-                        Barbell Bench Press (4x8) • Incline DB Press (4x10) • Overhead Press (3x10) • Cable Flyes • Triceps Pushdown
-                      </Text>
-                    </View>
-
-                    <View style={styles.routineDayItem}>
-                      <View style={styles.routineDayRow}>
-                        <Text style={styles.routineDayLabel}>DAY 2 • PULL & CORE</Text>
-                        <Text style={styles.routineDayDuration}>48 min</Text>
-                      </View>
-                      <Text style={styles.routineExerciseSnippet}>
-                        Barbell Deadlift (4x6) • Lat Pulldowns (4x10) • Chest-Supported Row (3x12) • Hammer Curls • Facepulls
-                      </Text>
-                    </View>
-
-                    <View style={styles.routineDayItem}>
-                      <View style={styles.routineDayRow}>
-                        <Text style={styles.routineDayLabel}>DAY 3 • LEGS & CALVES</Text>
-                        <Text style={styles.routineDayDuration}>55 min</Text>
-                      </View>
-                      <Text style={styles.routineExerciseSnippet}>
-                        Barbell Back Squat (4x8) • Romanian Deadlift (3x10) • Leg Press • Walking Lunges • Standing Calf Raises
-                      </Text>
-                    </View>
-
-                    {/* ===================================================== */}
-                    {/* FROSTED GLASS BLUR LOCK OVERLAY                       */}
-                    {/* ===================================================== */}
-                    <View style={styles.blurLockOverlay}>
-                      <Text style={styles.lockTitle}>
-                        Sign in to Unlock Your Workout Plan
-                      </Text>
-
-                      <Text style={styles.lockDescription}>
-                        Your custom exercises, sets, reps, progressive overload targets, and coach rationale are ready. Sign in or register to activate your blueprint.
-                      </Text>
-
-                      <TouchableOpacity
-                        style={styles.unlockButton}
-                        onPress={handleUnlockPlan}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.unlockButtonText}>
-                          Sign In
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            )}
           </Animated.View>
         </ScrollView>
 
-        {/* Bottom Navigation Bar for steps 1-6 */}
-        {currentStep <= 6 && (
+        {/* Bottom Navigation Bar for steps 1-7 */}
+        {currentStep <= 7 && (
           <View style={styles.bottomBar}>
             {globalError ? (
               <View style={styles.globalErrorBanner}>
@@ -1071,9 +1199,13 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
               activeOpacity={0.85}
             >
               <Text style={styles.continueBtnText}>
-                {currentStep === 6 ? 'Generate My Plan' : 'Next'}
+                {currentStep === 7
+                  ? generateWorkoutPreference === 'no'
+                    ? 'Continue to App'
+                    : 'Generate My Plan'
+                  : 'Next'}
               </Text>
-              {currentStep === 6 ? (
+              {currentStep === 7 && generateWorkoutPreference !== 'no' ? (
                 <Sparkles size={19} color={colors.textInverse} style={{ marginLeft: 8 }} />
               ) : (
                 <ArrowRight size={20} color={colors.textInverse} style={{ marginLeft: 8 }} />
@@ -1416,182 +1548,48 @@ const styles = StyleSheet.create({
   timelineStepSubtitlePending: {
     color: '#38383A',
   },
-  // =====================================================
-  // RESULT & BLURRED PREVIEW STYLES
-  // =====================================================
-  resultContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingBottom: spacing.xl,
-  },
-  readyHeader: {
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  readyPill: {
+  optionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(204, 255, 0, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.35)',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    marginBottom: spacing.sm,
-  },
-  readyPillText: {
-    fontSize: 10,
-    fontFamily: typography.fonts.headingBold,
-    color: '#CCFF00',
-    letterSpacing: 0.8,
-  },
-  readyTitle: {
-    fontSize: 30,
-    fontFamily: typography.fonts.headingBold,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: -0.8,
-    marginBottom: spacing.xs,
-    textAlign: 'center',
-  },
-  readySubtitle: {
-    fontSize: typography.sizes.sm,
-    fontFamily: typography.fonts.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    maxWidth: 320,
-    lineHeight: 20,
-  },
-  planCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  planCardHeader: {
-    padding: spacing.xl,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    alignItems: 'center',
-  },
-  planSplitTitle: {
-    fontSize: 20,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    justifyContent: 'center',
-  },
-  tagBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  tagBadgeText: {
-    fontSize: 11,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textSecondary,
-  },
-  workoutListWrapper: {
-    position: 'relative',
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  routineDayItem: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    opacity: 0.7,
-  },
-  routineDayRow: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 4,
   },
-  routineDayLabel: {
-    fontSize: 12,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.primary,
+  optionBadgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginLeft: 6,
+  },
+  optionBadgePillYes: {
+    backgroundColor: 'rgba(255, 214, 0, 0.12)',
+    borderColor: '#FFD600',
+  },
+  optionBadgePillNo: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  optionBadgePillText: {
+    fontSize: 9,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
-  routineDayDuration: {
-    fontSize: 11,
-    fontFamily: typography.fonts.bodyMedium,
-    color: colors.textMuted,
+  optionBadgePillTextYes: {
+    color: '#FFD600',
   },
-  routineExerciseSnippet: {
-    fontSize: 12,
-    fontFamily: typography.fonts.body,
-    color: colors.textSecondary,
-    lineHeight: 18,
+  optionBadgePillTextNo: {
+    color: '#A0A0A0',
   },
-  // Frosted Blur Lock Overlay
-  blurLockOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(10, 10, 12, 0.88)',
-    borderRadius: borderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    // Web backdrop filter blur
-    backdropFilter: 'blur(12px)',
-  } as any,
-  lockTitle: {
-    fontSize: 22,
-    fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
+  generationOptionCard: {
+    paddingVertical: 16,
+  },
+  subtitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 14,
+    color: '#9E9E9E',
     textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  lockDescription: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.body,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: spacing.xl,
-    maxWidth: 280,
-  },
-  unlockButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFD600',
-    height: 52,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.xl,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
-    width: '100%',
-  },
-  unlockButtonText: {
-    fontSize: typography.sizes.base,
-    fontFamily: typography.fonts.headingBold,
-    fontWeight: '700',
-    color: '#000000',
-    letterSpacing: 0.2,
+    marginTop: 8,
+    lineHeight: 20,
+    paddingHorizontal: 8,
   },
 });

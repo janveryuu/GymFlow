@@ -307,6 +307,15 @@ describe('Barcode Scanner Macro Module', () => {
       expect(interceptedHeaders?.['User-Agent']).toBe(DEFAULT_USER_AGENT);
     });
 
+    it('resolves verified staple items like SkyFlakes Crackers (8717703610062) directly', async () => {
+      const result = await fetchProductMacros('8717703610062');
+      expect(result.productName).toBe('M.Y. San SkyFlakes Crackers');
+      expect(result.perServing.calories).toBe(120);
+      expect(result.perServing.carbs_g).toBe(17);
+      expect(result.perServing.protein_g).toBe(2.5);
+      expect(result.perServing.fat_g).toBe(5);
+    });
+
     it('throws ProductNotFoundError when Open Food Facts status is 0', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,

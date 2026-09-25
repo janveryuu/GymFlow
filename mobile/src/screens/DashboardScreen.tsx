@@ -25,6 +25,7 @@ import { getSyncRepository } from '../sync/SyncRepository';
 import { mergeWorkouts, filterMergedCatalog } from '../sync/workoutMerge';
 import { getDatabase } from '../db/connection';
 import { useAuthStore } from '../store/authStore';
+import { useCustomWorkoutsStore } from '../store/customWorkoutsStore';
 import { calculateDailyCalorieTarget } from '../utils/nutritionCalculator';
 import type { Session, ProgressHistoryResponse, MergedWorkout } from '../types';
 
@@ -36,6 +37,7 @@ interface DashboardScreenProps {
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, route }) => {
   const user = useAuthStore((state) => state.user);
   const isProfileComplete = Boolean(user?.is_profile_completed);
+  const { pendingGeneratedWorkout, setPendingGeneratedWorkout } = useCustomWorkoutsStore();
 
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showProfileRequiredModal, setShowProfileRequiredModal] = useState(false);
@@ -678,6 +680,138 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
           </View>
         </View>
       </Modal>
+
+      {/* Generated Personalized Workout Modal */}
+      <Modal
+        visible={Boolean(pendingGeneratedWorkout)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPendingGeneratedWorkout(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.generatedWorkoutModalCard}>
+            {/* Header Badge */}
+            <View style={styles.generatedModalHeaderBadge}>
+              <Sparkles size={13} color="#000000" strokeWidth={2.5} />
+              <Text style={styles.generatedModalHeaderBadgeText}>PERSONALIZED WORKOUT GENERATED</Text>
+            </View>
+
+            {/* Icon */}
+            <View style={styles.generatedWorkoutIconWrapper}>
+              <Dumbbell size={28} color="#000000" strokeWidth={2.5} />
+            </View>
+
+            <Text style={styles.generatedModalTitle}>
+              {pendingGeneratedWorkout?.title || 'Your Personalized Routine'}
+            </Text>
+            <Text style={styles.generatedModalSubtitle}>
+              {pendingGeneratedWorkout?.description || 'Your custom routine has been synthesized and saved to your workouts library.'}
+            </Text>
+
+            {/* Quick Metrics Row */}
+            <View style={styles.generatedMetricsRow}>
+              <View style={styles.generatedMetricBadge}>
+                <Clock size={12} color={colors.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.generatedMetricBadgeText}>{pendingGeneratedWorkout?.duration_minutes || 50} min</Text>
+              </View>
+              <View style={styles.generatedMetricBadge}>
+                <Flame size={12} color="#FF6B00" style={{ marginRight: 4 }} />
+                <Text style={styles.generatedMetricBadgeText}>~{pendingGeneratedWorkout?.calories || 440} kcal</Text>
+              </View>
+              <View style={styles.generatedMetricBadge}>
+                <Dumbbell size={12} color="#00E5FF" style={{ marginRight: 4 }} />
+                <Text style={styles.generatedMetricBadgeText}>
+                  {pendingGeneratedWorkout?.routineExercises?.length || 5} Exercises
+                </Text>
+              </View>
+            </View>
+
+            {/* Preview of Exercises */}
+            <View style={styles.generatedExercisesList}>
+              <Text style={styles.generatedExercisesHeading}>ROUTINE PREVIEW</Text>
+              {pendingGeneratedWorkout?.routineExercises?.slice(0, 3).map((ex, index) => (
+                <View key={ex.id || index} style={styles.generatedExerciseRow}>
+                  <View style={styles.generatedExerciseNumberBadge}>
+                    <Text style={styles.generatedExerciseNumberText}>{index + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.generatedExerciseName} numberOfLines={1}>{ex.title}</Text>
+                    <Text style={styles.generatedExerciseMeta}>{ex.preferredSets} sets • {ex.preferredReps}</Text>
+                  </View>
+                  <View style={styles.generatedMusclePill}>
+                    <Text style={styles.generatedMusclePillText}>{ex.category}</Text>
+                  </View>
+                </View>
+              ))}
+              {(pendingGeneratedWorkout?.routineExercises?.length || 0) > 3 && (
+                <Text style={styles.generatedMoreExercisesText}>
+                  +{(pendingGeneratedWorkout?.routineExercises?.length || 0) - 3} more exercises in full routine
+                </Text>
+              )}
+            </View>
+
+            {/* View My Workouts Button */}
+            <TouchableOpacity
+              style={styles.generatedProceedBtn}
+              onPress={() => {
+                try {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } catch {
+                  // Ignore
+                }
+                setPendingGeneratedWorkout(null);
+                navigation.navigate('CatalogTab');
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="View my workouts"
+            >
+              <Text style={styles.generatedProceedBtnText}>View My Workouts</Text>
+              <ChevronRight size={18} color="#000000" strokeWidth={2.5} style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+
+            {/* Direct Start Routine Option */}
+            {pendingGeneratedWorkout?.id && (
+              <TouchableOpacity
+                style={styles.generatedStartDirectBtn}
+                onPress={() => {
+                  const routineId = pendingGeneratedWorkout.id;
+                  try {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  } catch {
+                    // Ignore
+                  }
+                  setPendingGeneratedWorkout(null);
+                  navigation.navigate('CustomWorkoutDetailScreen', { routineId });
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Start workout routine directly"
+              >
+                <Text style={styles.generatedStartDirectBtnText}>Start This Workout Now</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Dismiss Button */}
+            <TouchableOpacity
+              style={styles.generatedDismissBtn}
+              onPress={() => {
+                try {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                } catch {
+                  // Ignore
+                }
+                setPendingGeneratedWorkout(null);
+              }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Explore dashboard first"
+            >
+              <Text style={styles.generatedDismissBtnText}>Explore Dashboard First</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1283,5 +1417,202 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#9E9E9E',
+  },
+  // Generated Workout Modal Styles
+  generatedWorkoutModalCard: {
+    width: '100%',
+    maxHeight: '90%',
+    backgroundColor: '#141416',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 214, 0, 0.4)',
+    borderRadius: 24,
+    padding: 22,
+    alignItems: 'center',
+    shadowColor: '#FFD600',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  generatedModalHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD600',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 6,
+    marginBottom: 14,
+  },
+  generatedModalHeaderBadgeText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#000000',
+    letterSpacing: 0.6,
+  },
+  generatedWorkoutIconWrapper: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  generatedModalTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  generatedModalSubtitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 13,
+    color: '#9E9E9E',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 14,
+    paddingHorizontal: 8,
+  },
+  generatedMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+    width: '100%',
+  },
+  generatedMetricBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E1E22',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  generatedMetricBadgeText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  generatedExercisesList: {
+    width: '100%',
+    backgroundColor: '#18181C',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 18,
+    gap: 8,
+  },
+  generatedExercisesHeading: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#777777',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  generatedExerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  generatedExerciseNumberBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  generatedExerciseNumberText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  generatedExerciseName: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  generatedExerciseMeta: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 11,
+    color: '#8E8E93',
+  },
+  generatedMusclePill: {
+    backgroundColor: 'rgba(255, 214, 0, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  generatedMusclePillText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFD600',
+  },
+  generatedMoreExercisesText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 11,
+    color: '#777777',
+    textAlign: 'center',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  generatedProceedBtn: {
+    width: '100%',
+    backgroundColor: '#FFD600',
+    borderRadius: 14,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  generatedProceedBtnText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  generatedStartDirectBtn: {
+    width: '100%',
+    backgroundColor: '#1E1E22',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  generatedStartDirectBtnText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  generatedDismissBtn: {
+    width: '100%',
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  generatedDismissBtnText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8E8E93',
   },
 });

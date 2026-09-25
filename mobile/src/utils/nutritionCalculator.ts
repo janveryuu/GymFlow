@@ -4,7 +4,7 @@
  * Total Daily Energy Expenditure (TDEE), and goal-adjusted daily caloric/macro targets.
  */
 
-export type FitnessGoal = 'build_muscle' | 'lose_fat' | 'athletic' | 'health' | string;
+export type FitnessGoal = 'bulk' | 'cut' | 'maintain' | 'build_muscle' | 'lose_fat' | 'athletic' | 'health' | string;
 export type Gender = 'male' | 'female' | 'prefer_not_to_say' | string;
 
 export interface CalorieTargetInput {
@@ -16,6 +16,7 @@ export interface CalorieTargetInput {
   age?: number;
   fitnessGoal: FitnessGoal;
   activityMultiplier?: number;
+  calorieAdjustment?: number;
 }
 
 export interface MacroSplit {
@@ -120,15 +121,17 @@ export function calculateDailyCalorieTarget(input: CalorieTargetInput): CalorieT
   const normalizedGoal = (fitnessGoal || 'build_muscle').toLowerCase();
 
   switch (normalizedGoal) {
-    case 'build_muscle':
+    case 'bulk':
     case 'bulking':
+    case 'build_muscle':
       // Bulking: 15% caloric surplus for lean hypertrophy
       multiplier = 1.15;
       goalAdjustmentPercentage = 15;
       break;
 
-    case 'lose_fat':
+    case 'cut':
     case 'cutting':
+    case 'lose_fat':
       // Cutting: 20% caloric deficit for fat loss
       multiplier = 0.80;
       goalAdjustmentPercentage = -20;
@@ -140,8 +143,9 @@ export function calculateDailyCalorieTarget(input: CalorieTargetInput): CalorieT
       goalAdjustmentPercentage = 5;
       break;
 
-    case 'health':
+    case 'maintain':
     case 'maintenance':
+    case 'health':
     default:
       // Maintenance
       multiplier = 1.0;
@@ -150,6 +154,12 @@ export function calculateDailyCalorieTarget(input: CalorieTargetInput): CalorieT
   }
 
   let rawTarget = Math.round(tdee * multiplier);
+
+  // If explicit calorie surplus/deficit is chosen (+300, +500, -300, -500, 0)
+  if (typeof input.calorieAdjustment === 'number' && !isNaN(input.calorieAdjustment)) {
+    rawTarget = Math.round(tdee + input.calorieAdjustment);
+    goalAdjustmentPercentage = Math.round((input.calorieAdjustment / (tdee || 1)) * 100);
+  }
 
   // Apply safety minimum floor for cutting
   const isFemale = (gender || '').toLowerCase() === 'female';
@@ -162,9 +172,9 @@ export function calculateDailyCalorieTarget(input: CalorieTargetInput): CalorieT
   const targetCalories = Math.round(rawTarget / 50) * 50;
 
   // Derive recommended macronutrient split
-  // Protein: 2.0g/kg for bulking/athletic, 2.2g/kg for cutting (preserve muscle), 1.8g/kg for health
+  // Protein: 2.0g/kg for bulking/athletic/maintenance, 2.2g/kg for cutting (preserve muscle), 1.8g/kg for health
   let proteinPerKg = 2.0;
-  if (normalizedGoal === 'lose_fat' || normalizedGoal === 'cutting') {
+  if (normalizedGoal === 'lose_fat' || normalizedGoal === 'cutting' || normalizedGoal === 'cut') {
     proteinPerKg = 2.2;
   } else if (normalizedGoal === 'health') {
     proteinPerKg = 1.8;

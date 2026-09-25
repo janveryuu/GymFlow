@@ -22,6 +22,11 @@ import {
   User,
   ChevronRight,
   Shield,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Flame,
+  Zap,
 } from 'lucide-react-native';
 import { colors, typography, borderRadius, spacing } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
@@ -53,9 +58,18 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
   const { user, updateUser } = useAuthStore();
   const repo = getSyncRepository();
 
-  // Step indicator: 1 = Gender, 2 = Birthdate, 3 = Weight, 4 = Height
+  // Step indicator: 1 = Gender, 2 = Birthdate, 3 = Weight, 4 = Height, 5 = Goal, 6 = Calorie Adjustment
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Step 5: Primary Goal (bulk, cut, maintain)
+  const [goal, setGoal] = useState<'bulk' | 'cut' | 'maintain'>('bulk');
+
+  // Step 6: Calorie Adjustment (+300/+500 for bulk, -300/-500 for cut, 0 for maintain)
+  const [calorieAdjustment, setCalorieAdjustment] = useState<number>(300);
+
+  // Total steps: Maintain skips Step 6 (5 steps), while Bulk & Cut include Step 6 (6 steps)
+  const totalSteps = goal === 'maintain' ? 5 : 6;
 
   // Step 1: Gender
   const [gender, setGender] = useState<GenderOption>('male');
@@ -440,6 +454,14 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
     triggerHaptic();
     if (currentStep < 4) {
       setCurrentStep((prev) => prev + 1);
+    } else if (currentStep === 4) {
+      setCurrentStep(5);
+    } else if (currentStep === 5) {
+      if (goal === 'maintain') {
+        await handleCompleteSetup();
+      } else {
+        setCurrentStep(6);
+      }
     } else {
       await handleCompleteSetup();
     }
@@ -514,21 +536,10 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
     const birthdateFormatted = `${birthYear}-${String(birthMonth).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`;
 
     try {
-      let activeGoal = user?.fitness_goal || route?.params?.fitnessGoal || route?.params?.onboardingData?.fitnessGoal;
-      if (!activeGoal) {
-        try {
-          const db = await getDatabase();
-          const prefRow = await db.getFirstAsync<{ fitness_goal?: string | null }>(
-            `SELECT fitness_goal FROM Preferences WHERE id = 'default'`
-          );
-          if (prefRow?.fitness_goal) {
-            activeGoal = prefRow.fitness_goal;
-          }
-        } catch {}
-      }
-      activeGoal = activeGoal || 'build_muscle';
+      const activeGoal = goal;
+      const effectiveAdjustment = goal === 'maintain' ? 0 : calorieAdjustment;
 
-      // Calculate calorie target via Mifflin-St Jeor formula
+      // Calculate calorie target via Mifflin-St Jeor formula with custom surplus/deficit
       const calorieResult = calculateDailyCalorieTarget({
         weightKg,
         heightCm,
@@ -536,6 +547,7 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
         birthYear,
         birthdate: birthdateFormatted,
         fitnessGoal: activeGoal,
+        calorieAdjustment: effectiveAdjustment,
       });
       const targetCalories = calorieResult.targetCalories;
 
@@ -614,7 +626,7 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
         </TouchableOpacity>
 
         <View style={styles.progressTrackContainer}>
-          {[1, 2, 3, 4].map((step) => (
+          {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step) => (
             <View
               key={step}
               style={[
@@ -626,7 +638,7 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
         </View>
 
         <View style={styles.stepBadge}>
-          <Text style={styles.stepBadgeText}>STEP {currentStep} OF 4</Text>
+          <Text style={styles.stepBadgeText}>STEP {Math.min(currentStep, totalSteps)} OF {totalSteps}</Text>
         </View>
       </View>
 
@@ -1097,6 +1109,176 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
             </View>
           </View>
         )}
+
+        {/* STEP 5: PRIMARY FITNESS GOAL */}
+        {currentStep === 5 && (
+          <View style={styles.stepSection}>
+            <View style={styles.centeredTitleGroup}>
+              <Text style={styles.centeredStepTitle}>What is your primary goal?</Text>
+              <Text style={styles.stepSubtitleText}>
+                We will personalize your daily nutrition and training volume to match your physique objective.
+              </Text>
+            </View>
+
+            <View style={styles.optionsList}>
+              {[
+                {
+                  id: 'bulk' as const,
+                  title: 'Bulk',
+                  tag: 'Hypertrophy',
+                  subtitle: 'Caloric surplus for muscle growth & strength gains',
+                  icon: TrendingUp,
+                },
+                {
+                  id: 'cut' as const,
+                  title: 'Cut',
+                  tag: 'Fat Loss',
+                  subtitle: 'Caloric deficit to burn body fat while preserving lean muscle',
+                  icon: TrendingDown,
+                },
+                {
+                  id: 'maintain' as const,
+                  title: 'Maintain',
+                  tag: 'Balance',
+                  subtitle: 'Equal caloric balance to preserve current physique & energy',
+                  icon: Activity,
+                },
+              ].map((opt) => {
+                const isSelected = goal === opt.id;
+                const IconComponent = opt.icon;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                    onPress={() => {
+                      triggerHaptic();
+                      setGoal(opt.id);
+                      if (opt.id === 'bulk') {
+                        setCalorieAdjustment((prev) => (prev === 500 ? 500 : 300));
+                      } else if (opt.id === 'cut') {
+                        setCalorieAdjustment((prev) => (prev === -500 ? -500 : -300));
+                      } else {
+                        setCalorieAdjustment(0);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={opt.title}
+                  >
+                    <View style={[styles.optionIconBox, isSelected && styles.optionIconBoxSelected]}>
+                      <IconComponent size={22} color={isSelected ? '#000000' : '#FFFFFF'} strokeWidth={2.5} />
+                    </View>
+                    <View style={styles.optionContent}>
+                      <View style={styles.optionHeaderRow}>
+                        <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
+                          {opt.title}
+                        </Text>
+                        <View style={[styles.tagBadge, isSelected && styles.tagBadgeSelected]}>
+                          <Text style={[styles.tagBadgeText, isSelected && styles.tagBadgeTextSelected]}>
+                            {opt.tag}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
+                    </View>
+                    <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
+                      {isSelected && <Check size={14} color="#000000" strokeWidth={3} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* STEP 6: CONDITIONAL CALORIE ADJUSTMENT */}
+        {currentStep === 6 && (goal === 'bulk' || goal === 'cut') && (
+          <View style={styles.stepSection}>
+            <View style={styles.centeredTitleGroup}>
+              <Text style={styles.centeredStepTitle}>
+                {goal === 'bulk' ? 'Select your calorie surplus' : 'Select your calorie deficit'}
+              </Text>
+              <Text style={styles.stepSubtitleText}>
+                {goal === 'bulk'
+                  ? 'Choose how many extra calories to add above your daily maintenance level.'
+                  : 'Choose how many calories to subtract below your daily maintenance level.'}
+              </Text>
+            </View>
+
+            <View style={styles.optionsList}>
+              {(goal === 'bulk'
+                ? [
+                    {
+                      value: 300,
+                      title: '+300 Calories',
+                      badge: 'Lean Bulk',
+                      subtitle: 'Gradual, steady lean muscle gain with minimal fat retention.',
+                      icon: Flame,
+                    },
+                    {
+                      value: 500,
+                      title: '+500 Calories',
+                      badge: 'Aggressive Bulk',
+                      subtitle: 'Accelerated mass building and higher lifting strength progression.',
+                      icon: Zap,
+                    },
+                  ]
+                : [
+                    {
+                      value: -300,
+                      title: '-300 Calories',
+                      badge: 'Moderate Cut',
+                      subtitle: 'Sustainable, steady fat loss while preserving maximum lean muscle mass.',
+                      icon: Flame,
+                    },
+                    {
+                      value: -500,
+                      title: '-500 Calories',
+                      badge: 'Aggressive Cut',
+                      subtitle: 'Faster fat shredding and definition for accelerated transformation.',
+                      icon: Zap,
+                    },
+                  ]
+              ).map((opt) => {
+                const isSelected = calorieAdjustment === opt.value;
+                const IconComponent = opt.icon;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                    onPress={() => {
+                      triggerHaptic();
+                      setCalorieAdjustment(opt.value);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={opt.title}
+                  >
+                    <View style={[styles.optionIconBox, isSelected && styles.optionIconBoxSelected]}>
+                      <IconComponent size={22} color={isSelected ? '#000000' : '#FFFFFF'} strokeWidth={2.5} />
+                    </View>
+                    <View style={styles.optionContent}>
+                      <View style={styles.optionHeaderRow}>
+                        <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
+                          {opt.title}
+                        </Text>
+                        <View style={[styles.tagBadge, isSelected && styles.tagBadgeSelected]}>
+                          <Text style={[styles.tagBadgeText, isSelected && styles.tagBadgeTextSelected]}>
+                            {opt.badge}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
+                    </View>
+                    <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
+                      {isSelected && <Check size={14} color="#000000" strokeWidth={3} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Bottom CTA Button */}
@@ -1107,14 +1289,20 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
           disabled={isSaving}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel={currentStep === 4 ? 'Complete Profile Setup' : 'Continue to next step'}
+          accessibilityLabel={
+            (currentStep === 5 && goal === 'maintain') || currentStep === 6
+              ? 'Complete Profile Setup'
+              : 'Continue to next step'
+          }
         >
           {isSaving ? (
             <ActivityIndicator size="small" color="#000000" />
           ) : (
             <View style={styles.buttonContent}>
               <Text style={styles.primaryButtonText}>
-                {currentStep === 4 ? 'Complete Profile Setup' : 'Continue'}
+                {(currentStep === 5 && goal === 'maintain') || currentStep === 6
+                  ? 'Complete Profile Setup'
+                  : 'Continue'}
               </Text>
               <ChevronRight size={18} color="#000000" strokeWidth={2.5} />
             </View>
@@ -1282,6 +1470,40 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: -0.6,
     lineHeight: 38,
+  },
+  stepSubtitleText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+    paddingHorizontal: 16,
+  },
+  optionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  tagBadge: {
+    backgroundColor: '#242426',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  tagBadgeSelected: {
+    backgroundColor: '#FFFFFF',
+  },
+  tagBadgeText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#A0A0A5',
+    textTransform: 'uppercase',
+  },
+  tagBadgeTextSelected: {
+    color: '#000000',
   },
 
   // 3-Column Drum Wheel Picker

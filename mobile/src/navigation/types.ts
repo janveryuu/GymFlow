@@ -23,7 +23,7 @@ export type RootStackParamList = {
   WorkoutDetail: { workoutId?: string; exercise?: any; routineId?: string };
   ScheduleScreen: undefined;
   NutritionScreen: { openManualEntry?: boolean } | undefined;
-  BarcodeScannerScreen: undefined;
+  BarcodeScannerScreen: { mode?: 'camera' | 'upload'; initialImageUri?: string; autoPickImage?: boolean } | undefined;
   AiFoodScannerScreen: undefined;
   WaterIntakeScreen: undefined;
   AiCoachScreen: undefined;

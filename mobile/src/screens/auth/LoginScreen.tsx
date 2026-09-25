@@ -186,6 +186,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ route, navigation }) =
           ],
         };
         useCustomWorkoutsStore.getState().addCustomWorkout(customWorkout as any);
+        useCustomWorkoutsStore.getState().setPendingGeneratedWorkout(customWorkout as any);
       } catch {
         // Ignore
       }
@@ -376,6 +377,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ route, navigation }) =
         ...user,
         ...(onboardingData?.fitnessGoal ? { fitness_goal: onboardingData.fitnessGoal } : {}),
       };
+      await syncOnboardingProfile();
       await setAuth(token, resolvedUser, false);
     } catch {
       useDevMockStore.getState().setMockEnabled(true);
@@ -387,6 +389,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ route, navigation }) =
         must_change_password: false,
         fitness_goal: onboardingData?.fitnessGoal || 'build_muscle',
       };
+      await syncOnboardingProfile();
       await setAuth('dev-offline-token-gymflow', fallbackUser, false);
     } finally {
       setIsSubmitting(false);
