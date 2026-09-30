@@ -32,4 +32,5 @@ export type RootStackParamList = {
   WorkoutHistoryScreen: undefined;
   AiWorkoutGenerateScreen: undefined;
   StreakScreen: undefined;
+  ExerciseDetailScreen: { workout?: any } | undefined;
 };

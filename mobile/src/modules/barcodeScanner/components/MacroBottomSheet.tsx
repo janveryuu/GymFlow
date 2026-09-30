@@ -23,7 +23,7 @@ import {
   Dumbbell,
   Wheat,
   Droplet,
-} from 'lucide-react-native';
+} from '../../../components/icons';
 import { colors, typography, borderRadius } from '../../../theme';
 import { ProductMacroInfo, MealType, MacroNutrientValues } from '../types';
 

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -16,21 +17,24 @@ import {
   Dumbbell,
   Timer,
   ChevronRight,
-  X,
   Play,
-  Lightbulb,
   CheckCircle2,
   Trash2,
-  Repeat,
   Check,
   Clock,
-  Flame,
-} from 'lucide-react-native';
-import { colors, typography, borderRadius, spacing } from '../theme';
+} from '../components/icons';
+import { colors } from '../theme';
 import { WorkoutIllustration } from '../components/WorkoutIllustration';
+import { SlideCommit } from '../components/SlideCommit';
 import { useCustomWorkoutsStore, CustomExerciseItem } from '../store/customWorkoutsStore';
 import { useWorkoutHistoryStore } from '../store/workoutHistoryStore';
 import { getSyncRepository } from '../sync/SyncRepository';
+
+const APPLE_FONT_FAMILY = Platform.OS === 'web'
+  ? '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif'
+  : Platform.OS === 'ios'
+  ? 'System'
+  : 'Roboto';
 
 export const CustomWorkoutDetailScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -69,29 +73,34 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
   if (!routine) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <ChevronLeft size={24} color={colors.text} strokeWidth={2.5} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Routine</Text>
-          <View style={{ width: 38 }} />
+        <View style={styles.navBar}>
+          <View style={styles.navToolbar}>
+            <TouchableOpacity
+              style={styles.toolbarIconButton}
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <ChevronLeft size={22} color="#FFFFFF" strokeWidth={2.4} />
+            </TouchableOpacity>
+            <Text style={styles.navBarTitle}>Routine</Text>
+            <View style={styles.toolbarIconButton} />
+          </View>
         </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Dumbbell size={48} color={colors.textMuted} style={{ marginBottom: 12 }} />
-          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 6 }}>
-            Routine Not Found
-          </Text>
-          <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginBottom: 20 }}>
+
+        <View style={styles.emptyContainer}>
+          <Dumbbell size={48} color="rgba(255, 255, 255, 0.3)" style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>Routine Not Found</Text>
+          <Text style={styles.emptySubtitle}>
             This custom routine might have been removed or does not exist.
           </Text>
           <TouchableOpacity
-            style={{ backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 }}
+            style={styles.emptyActionButton}
             onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
           >
-            <Text style={{ color: colors.textInverse, fontWeight: '700', fontSize: 14 }}>Return to Workouts</Text>
+            <Text style={styles.emptyActionText}>Return to Workouts</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -111,19 +120,6 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
       exercise: ex,
       routineId: routine.id,
     });
-  };
-
-  const handleToggleFinish = (exerciseId: string) => {
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      // Haptics optional
-    }
-    setFinishedExerciseIds((prev) =>
-      prev.includes(exerciseId)
-        ? prev.filter((id) => id !== exerciseId)
-        : [...prev, exerciseId]
-    );
   };
 
   const handleStartOrFinishPress = () => {
@@ -166,7 +162,7 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
       category: routine?.category || 'Custom',
     });
 
-    // 2. Also optimistically save to local SQLite progress
+    // 2. Optimistically save to local SQLite progress
     try {
       const repo = getSyncRepository();
       repo.submitProgress({
@@ -209,37 +205,45 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* 1. TOP HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <ChevronLeft size={24} color={colors.text} strokeWidth={2.5} />
-        </TouchableOpacity>
+      {/* 1. iOS Navigation Toolbar */}
+      <View style={styles.navBar}>
+        <View style={styles.navToolbar}>
+          <TouchableOpacity
+            style={styles.toolbarIconButton}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ChevronLeft size={22} color="#FFFFFF" strokeWidth={2.4} />
+          </TouchableOpacity>
 
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {routine?.title || 'Custom Routine'}
-        </Text>
+          <Text style={styles.navBarTitle} numberOfLines={1}>
+            {routine.title}
+          </Text>
 
-        <TouchableOpacity
-          style={styles.deleteHeaderButton}
-          onPress={handleDeleteRoutine}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel="Delete routine"
-        >
-          <Trash2 size={18} color="#FF453A" />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.toolbarIconButton}
+            onPress={handleDeleteRoutine}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Delete routine"
+          >
+            <Trash2 size={20} color="#FF453A" strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* EXERCISES LIST SECTION */}
+        {/* Routine Header */}
+        <View style={styles.routineHeader}>
+          <Text style={styles.largeTitle}>{routine.title}</Text>
+        </View>
+
+        {/* Exercises Section Heading */}
         <View style={styles.sectionHeaderWrap}>
           <Text style={styles.sectionTitle}>Exercises in this Workout</Text>
           <Text style={styles.sectionSubtitle}>
@@ -247,6 +251,7 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
           </Text>
         </View>
 
+        {/* Exercise Grouped Cards */}
         {exercises.map((exercise, index) => {
           const isFinished = finishedExerciseIds.includes(exercise.id);
 
@@ -258,11 +263,11 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
                 isFinished && styles.exerciseCardFinished,
               ]}
               onPress={() => handleOpenExerciseInfo(exercise)}
-              activeOpacity={0.85}
+              activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel={`${exercise.title}, ${isFinished ? 'completed' : 'pending'}`}
             >
-              {/* Step Index Badge */}
+              {/* Step Index Rounded Badge */}
               <View
                 style={[
                   styles.stepBadge,
@@ -270,99 +275,93 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
                 ]}
               >
                 {isFinished ? (
-                  <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                  <Check size={11} color="#FFFFFF" strokeWidth={3} />
                 ) : (
                   <Text style={styles.stepBadgeText}>{index + 1}</Text>
                 )}
               </View>
 
-              {/* Illustration / Icon Squircle */}
+              {/* Illustration Thumbnail (Static Line-Art Image) */}
               <View style={styles.exerciseSquircle}>
                 {exercise.slug ? (
                   <WorkoutIllustration
                     slug={exercise.slug}
                     size={52}
+                    autoPlay={false}
+                    interactive={false}
                     backgroundColor="#FFFFFF"
                     containerStyle={styles.exerciseIllustration}
                   />
                 ) : (
-                  <Dumbbell size={20} color="#0A0A0A" />
+                  <Dumbbell size={22} color="#1C1C1E" strokeWidth={2} />
                 )}
               </View>
 
-              {/* Content Column */}
+              {/* Exercise Details Column: Title on top, Category below in gray */}
               <View style={styles.exerciseInfo}>
+                <Text style={styles.exerciseTitle} numberOfLines={1}>
+                  {exercise.title}
+                </Text>
+
                 <View style={styles.categoryRow}>
                   <Text style={styles.exerciseCategory}>
                     {exercise.category?.toUpperCase() || 'STRENGTH'}
                   </Text>
                   {isFinished && (
                     <View style={styles.finishedTag}>
-                      <Check size={9} color="#16A34A" strokeWidth={3} />
-                      <Text style={styles.finishedTagText}>FINISHED</Text>
+                      <Check size={9} color="#30D158" strokeWidth={3} />
+                      <Text style={styles.finishedTagText}>COMPLETED</Text>
                     </View>
                   )}
                 </View>
-                <Text style={styles.exerciseTitle} numberOfLines={1}>
-                  {exercise.title}
-                </Text>
-
-                {/* Targets Summary Chips */}
-                <View style={styles.targetsRow}>
-                  <View style={styles.targetBadge}>
-                    <Text style={styles.targetBadgeText}>
-                      {exercise.preferredSets} Sets • {exercise.preferredReps}
-                    </Text>
-                  </View>
-
-                  <View style={styles.targetBadgeSecondary}>
-                    <Timer size={11} color="#6B6B6B" />
-                    <Text style={styles.targetBadgeSecondaryText}>
-                      {exercise.restTimeSeconds}s rest
-                    </Text>
-                  </View>
-                </View>
               </View>
 
+              {/* iOS Disclosure Chevron */}
               <ChevronRight
-                size={18}
-                color={isFinished ? '#16A34A' : '#8E8E8E'}
+                size={14}
+                color={isFinished ? '#30D158' : 'rgba(255, 255, 255, 0.3)'}
+                strokeWidth={2.5}
                 style={styles.chevron}
               />
             </TouchableOpacity>
           );
         })}
 
-        <View style={{ height: 90 }} />
+        <View style={{ height: 110 }} />
       </ScrollView>
 
-      {/* 4. FLOATING BOTTOM START / FINISH WORKOUT CTA */}
+      {/* Floating Apple-Style Bottom Action Dock */}
       <View style={styles.bottomBarWrap}>
-        <TouchableOpacity
-          style={[styles.startButton, isStarted && styles.startButtonActive]}
-          onPress={handleStartOrFinishPress}
-          activeOpacity={0.88}
-        >
-          {isStarted ? (
-            <View style={styles.activeTimerRow}>
-              <View style={styles.timerPill}>
-                <Timer size={16} color="#22C55E" />
-                <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
-              </View>
-              <Text style={[styles.startButtonText, { color: colors.text }]}>Finish Workout</Text>
+        {isStarted ? (
+          <TouchableOpacity
+            style={styles.activeWorkoutBar}
+            onPress={handleStartOrFinishPress}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Finish workout"
+          >
+            <View style={styles.activeTimerPill}>
+              <Timer size={15} color="#30D158" strokeWidth={2.4} />
+              <Text style={styles.activeTimerText}>{formatTime(elapsedSeconds)}</Text>
             </View>
-          ) : (
-            <View style={styles.startRow}>
-              <Play size={16} color={colors.textInverse} fill={colors.textInverse} />
-              <Text style={styles.startButtonText}>Start Workout</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+            <Text style={styles.finishWorkoutText}>Finish Workout</Text>
+            <ChevronRight size={16} color="rgba(255, 255, 255, 0.5)" strokeWidth={2.5} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.startWorkoutButton}
+            onPress={handleStartOrFinishPress}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            accessibilityLabel="Start workout"
+          >
+            <Play size={17} color="#FFFFFF" fill="#FFFFFF" />
+            <Text style={styles.startWorkoutText}>Start Workout</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-
-
-      {/* 6. "ARE YOUR WORKOUT DONE?" CONFIRMATION MODAL */}
+      {/* Apple HIG Confirmation Modal */}
       <Modal
         visible={isConfirmDoneModalVisible}
         transparent
@@ -372,52 +371,40 @@ export const CustomWorkoutDetailScreen: React.FC = () => {
         <View style={styles.modalBackdrop}>
           <View style={styles.confirmModalCard}>
             <View style={styles.confirmIconSquircle}>
-              <CheckCircle2 size={32} color="#16A34A" />
+              <CheckCircle2 size={30} color="#30D158" />
             </View>
 
-            <Text style={styles.confirmModalTitle}>Are your workout done?</Text>
+            <Text style={styles.confirmModalTitle}>Workout Complete?</Text>
             <Text style={styles.confirmModalSubtitle}>
               Great work! Review your session stats below and save your workout to history.
             </Text>
 
-            {/* Stats Preview Box */}
-            <View style={styles.confirmStatsBox}>
-              <View style={styles.confirmStatItem}>
-                <Clock size={16} color={colors.text} />
-                <Text style={styles.confirmStatValue}>{formatTime(elapsedSeconds)}</Text>
-                <Text style={styles.confirmStatLabel}>Elapsed</Text>
+            {/* Prominent Elapsed Time (Without Card Background) */}
+            <View style={styles.confirmElapsedSection}>
+              <View style={styles.confirmElapsedRow}>
+                <Clock size={20} color="#30D158" strokeWidth={2.2} />
+                <Text style={styles.confirmElapsedValue}>{formatTime(elapsedSeconds)}</Text>
               </View>
-              <View style={styles.confirmStatDivider} />
-              <View style={styles.confirmStatItem}>
-                <Dumbbell size={16} color={colors.text} />
-                <Text style={styles.confirmStatValue}>
-                  {finishedExerciseIds.length}/{exercises.length}
-                </Text>
-                <Text style={styles.confirmStatLabel}>Exercises</Text>
-              </View>
-              <View style={styles.confirmStatDivider} />
-              <View style={styles.confirmStatItem}>
-                <Flame size={16} color={colors.text} />
-                <Text style={styles.confirmStatValue}>
-                  {Math.max(25, Math.round((elapsedSeconds / 60) * 8.5))}
-                </Text>
-                <Text style={styles.confirmStatLabel}>Calories</Text>
-              </View>
+              <Text style={styles.confirmElapsedLabel}>Elapsed Time</Text>
             </View>
 
-            {/* Modal Buttons */}
-            <TouchableOpacity
-              style={styles.confirmDoneBtn}
-              onPress={handleConfirmFinishWorkout}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.confirmDoneBtnText}>Yes, I'm Done</Text>
-            </TouchableOpacity>
+            {/* Slide to Commit Button */}
+            <SlideCommit
+              label="Slide to Save & Finish"
+              doneLabel="Workout Saved!"
+              onConfirm={handleConfirmFinishWorkout}
+              trackColor="#262626"
+              handleColor="#FFFFFF"
+              successColor="#30D158"
+              height={56}
+              radius={28}
+              style={styles.confirmSlideBtn}
+            />
 
             <TouchableOpacity
               style={styles.confirmResumeBtn}
               onPress={() => setIsConfirmDoneModalVisible(false)}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
               <Text style={styles.confirmResumeBtnText}>Resume Workout</Text>
             </TouchableOpacity>
@@ -433,44 +420,55 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+
+  /* 1. iOS Navigation Toolbar */
+  navBar: {
+    backgroundColor: colors.background,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+  navToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    height: 44,
   },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  toolbarIconButton: {
+    minWidth: 40,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceElevated,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '700',
+  navBarTitle: {
+    fontSize: 17,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    letterSpacing: -0.4,
     textAlign: 'center',
     flex: 1,
-    marginHorizontal: 12,
+    marginHorizontal: 8,
   },
-  deleteHeaderButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-  },
+
+  /* Scroll Content */
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 8,
+  },
+
+  /* Routine Header */
+  routineHeader: {
+    marginBottom: 20,
+    marginTop: 4,
+  },
+  largeTitle: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: 0.35,
+    lineHeight: 38,
+    color: '#FFFFFF',
+    fontFamily: APPLE_FONT_FAMILY,
   },
 
   /* Section Header */
@@ -479,77 +477,57 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    letterSpacing: -0.3,
+    marginBottom: 3,
   },
   sectionSubtitle: {
-    fontSize: 12,
-    fontFamily: typography.fonts.body,
-    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.5)',
+    lineHeight: 18,
   },
 
-  /* Exercise Card */
+  /* Inset Grouped Exercise Cards (matching CatalogScreen) */
   exerciseCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     marginBottom: 10,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 2,
   },
   exerciseCardFinished: {
-    borderColor: '#22C55E',
-    borderWidth: 1.5,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderColor: 'rgba(48, 209, 88, 0.35)',
+    backgroundColor: 'rgba(48, 209, 88, 0.08)',
   },
   stepBadge: {
     width: 22,
     height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.surfaceElevated,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
+  stepBadgeFinished: {
+    backgroundColor: '#30D158',
+  },
   stepBadgeText: {
     fontSize: 11,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  stepBadgeFinished: {
-    backgroundColor: '#22C55E',
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
-  },
-  finishedTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-  },
-  finishedTagText: {
-    fontSize: 9,
-    fontFamily: typography.fonts.headingBold,
-    color: '#22C55E',
-    fontWeight: '800',
-    letterSpacing: 0.4,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '600',
   },
   exerciseSquircle: {
     width: 50,
@@ -570,357 +548,205 @@ const styles = StyleSheet.create({
   },
   exerciseInfo: {
     flex: 1,
-  },
-  exerciseCategory: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    letterSpacing: 0.5,
-    marginBottom: 1,
+    justifyContent: 'center',
   },
   exerciseTitle: {
-    fontSize: 15,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 16,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    letterSpacing: -0.2,
+    marginBottom: 3,
   },
-  targetsRow: {
+  categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  targetBadge: {
-    backgroundColor: colors.surfaceHighlight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+  exerciseCategory: {
+    fontSize: 11.5,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.45)',
+    letterSpacing: 0.4,
   },
-  targetBadgeText: {
-    fontSize: 10.5,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  targetBadgeSecondary: {
+  finishedTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 4,
+    gap: 3,
+    backgroundColor: 'rgba(48, 209, 88, 0.16)',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
   },
-  targetBadgeSecondaryText: {
-    fontSize: 10.5,
-    fontFamily: typography.fonts.body,
-    color: colors.textSecondary,
-    fontWeight: '600',
+  finishedTagText: {
+    fontSize: 9.5,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#30D158',
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   chevron: {
     marginLeft: 8,
   },
 
-  /* Floating Bottom Bar */
+  /* Floating Apple-Style Bottom Action Dock */
   bottomBarWrap: {
     position: 'absolute',
-    bottom: 24,
-    left: 16,
-    right: 16,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
+    backgroundColor: Platform.OS === 'web' ? 'rgba(10, 10, 10, 0.88)' : 'rgba(10, 10, 10, 0.95)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+    } as any : {}),
   },
-  startButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 16,
+  startWorkoutButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 14,
     paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  startButtonActive: {
-    backgroundColor: colors.surfaceElevated,
-    borderColor: '#22C55E',
-    borderWidth: 1.5,
-  },
-  startButtonText: {
-    fontSize: 15,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textInverse,
-    fontWeight: '700',
-  },
-  activeTimerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  startRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  timerPill: {
+  startWorkoutText: {
+    fontSize: 16,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  activeWorkoutBar: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(48, 209, 88, 0.35)',
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activeTimerPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.surfaceHighlight,
+    backgroundColor: 'rgba(48, 209, 88, 0.15)',
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 8,
   },
-  timerText: {
+  activeTimerText: {
     fontSize: 14,
-    fontFamily: typography.fonts.headingBold,
-    color: '#22C55E',
-    fontWeight: '800',
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#30D158',
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  finishWorkoutText: {
+    fontSize: 15,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
 
-  /* Modal */
+  /* Apple HIG Confirmation Modal (matching CatalogScreen modals) */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+    } as any : {}),
   },
-  modalCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: colors.surface,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  modalCardFinished: {
-    borderColor: '#22C55E',
-    borderWidth: 2,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  modalCategoryText: {
-    fontSize: 10.5,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textSecondary,
-    letterSpacing: 0.8,
-  },
-  modalIllustrationWrap: {
-    width: '100%',
-    height: 110,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  modalIllustration: {
-    width: 120,
-    height: 110,
-    borderWidth: 0,
-    borderRadius: 0,
-    backgroundColor: 'transparent',
-  },
-  modalExerciseTitle: {
-    fontSize: 18,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  modalEquipmentText: {
-    fontSize: 11.5,
-    fontFamily: typography.fonts.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-
-  /* 3 Target Spec Boxes */
-  specsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 14,
-  },
-  specBox: {
-    flex: 1,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  specBoxValue: {
-    fontSize: 16,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '800',
-    marginTop: 4,
-    marginBottom: 1,
-  },
-  specBoxLabel: {
-    fontSize: 10,
-    fontFamily: typography.fonts.body,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-
-  /* Tip Card */
-  tipCard: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    marginBottom: 16,
-  },
-  tipHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  tipTitle: {
-    fontSize: 12,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  tipDesc: {
-    fontSize: 11.5,
-    fontFamily: typography.fonts.body,
-    color: colors.textSecondary,
-    lineHeight: 16,
-  },
-  finishExerciseBtn: {
-    backgroundColor: '#16A34A',
-    borderRadius: 12,
-    paddingVertical: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 8,
-    shadowColor: '#16A34A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  finishExerciseBtnCompleted: {
-    backgroundColor: '#15803D',
-  },
-  finishExerciseBtnText: {
-    fontSize: 14,
-    fontFamily: typography.fonts.headingBold,
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  /* Confirmation Modal */
   confirmModalCard: {
     width: '100%',
-    maxWidth: 340,
-    backgroundColor: colors.surface,
-    borderRadius: 22,
+    maxWidth: 350,
+    backgroundColor: 'rgba(28, 28, 30, 0.96)',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    padding: 22,
     alignItems: 'center',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.45,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: 8,
   },
   confirmIconSquircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(48, 209, 88, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
   confirmModalTitle: {
-    fontSize: 20,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '800',
+    fontSize: 19,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    letterSpacing: -0.3,
     textAlign: 'center',
     marginBottom: 6,
   },
   confirmModalSubtitle: {
     fontSize: 13,
-    fontFamily: typography.fonts.body,
-    color: colors.textSecondary,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'center',
     lineHeight: 18,
+    marginBottom: 18,
+  },
+  confirmElapsedSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
     marginBottom: 20,
   },
-  confirmStatsBox: {
+  confirmElapsedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 20,
+    gap: 8,
   },
-  confirmStatItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  confirmStatValue: {
-    fontSize: 15,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  confirmStatLabel: {
-    fontSize: 10,
-    fontFamily: typography.fonts.body,
-    color: colors.textMuted,
-  },
-  confirmStatDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: colors.border,
-  },
-  confirmDoneBtn: {
-    width: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  confirmDoneBtnText: {
-    fontSize: 15,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textInverse,
+  confirmElapsedValue: {
+    fontSize: 34,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
     fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
+  },
+  confirmElapsedLabel: {
+    fontSize: 11,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.45)',
+    fontWeight: '600',
+    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  confirmSlideBtn: {
+    width: '100%',
+    marginBottom: 12,
   },
   confirmResumeBtn: {
     paddingVertical: 8,
@@ -928,8 +754,44 @@ const styles = StyleSheet.create({
   },
   confirmResumeBtnText: {
     fontSize: 13,
-    fontFamily: typography.fonts.headingMedium,
-    color: colors.textMuted,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontWeight: '500',
+  },
+
+  /* Empty State */
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    marginBottom: 6,
+    letterSpacing: -0.2,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.55)',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  emptyActionButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 12,
+  },
+  emptyActionText: {
+    color: '#FFFFFF',
     fontWeight: '600',
+    fontSize: 14,
+    fontFamily: APPLE_FONT_FAMILY,
   },
 });

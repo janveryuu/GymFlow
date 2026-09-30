@@ -16,7 +16,7 @@ import {
   CheckCircle2,
   Calendar,
   Sparkles,
-} from 'lucide-react-native';
+} from '../components/icons';
 import { colors, typography, borderRadius, spacing } from '../theme';
 import { EmptyState } from '../components/EmptyState';
 import { useWorkoutHistoryStore, WorkoutHistoryItem } from '../store/workoutHistoryStore';

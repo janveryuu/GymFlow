@@ -24,7 +24,7 @@ import {
   RotateCcw,
   Edit3,
   Camera,
-} from 'lucide-react-native';
+} from '../../../components/icons';
 import { colors, typography, borderRadius } from '../../../theme';
 import { ScannerPhase, ScannerErrorState } from '../types';
 

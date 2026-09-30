@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,16 @@ import {
   Modal,
   Platform,
   Image,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { Check, Calendar as CalendarIcon, Flame, Clock, Bell, MapPin, User, Sparkles, ChevronRight, Dumbbell, TrendingUp, Droplets, Salad, Bot, Lock } from 'lucide-react-native';
+import { Check, Calendar as CalendarIcon, Flame, Clock, Bell, MapPin, User, Sparkles, ChevronRight, Dumbbell, TrendingUp, Droplets, Salad, Bot, Lock, Watch } from '../components/icons';
 import { colors, typography, borderRadius, spacing } from '../theme';
 import { PercentRing } from '../components/PercentRing';
-import { WorkoutCardSkeleton, SessionCardSkeleton } from '../components/SkeletonLoader';
+import { DashboardSkeleton } from '../components/SkeletonLoader';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorCard } from '../components/ErrorCard';
 import { WorkoutIllustration } from '../components/WorkoutIllustration';
@@ -27,6 +29,8 @@ import { getDatabase } from '../db/connection';
 import { useAuthStore } from '../store/authStore';
 import { useCustomWorkoutsStore } from '../store/customWorkoutsStore';
 import { calculateDailyCalorieTarget } from '../utils/nutritionCalculator';
+import { BmiMetricSection } from '../components/BmiMetricSection';
+import { DarkVeil } from '../components/DarkVeil';
 import type { Session, ProgressHistoryResponse, MergedWorkout } from '../types';
 
 interface DashboardScreenProps {
@@ -68,6 +72,32 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [nutritionConsumed, setNutritionConsumed] = useState<number>(0);
   const [nutritionTarget, setNutritionTarget] = useState<number>(2000);
+
+  // Smooth entrance animation for fully loaded dashboard sections
+  const hasLoadedOnce = useRef(false);
+  const contentFadeAnim = useRef(new Animated.Value(0)).current;
+  const contentSlideAnim = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    if (!isLoading) {
+      contentFadeAnim.setValue(0);
+      contentSlideAnim.setValue(18);
+      Animated.parallel([
+        Animated.timing(contentFadeAnim, {
+          toValue: 1,
+          duration: 480,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(contentSlideAnim, {
+          toValue: 0,
+          duration: 480,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]).start();
+    }
+  }, [isLoading, contentFadeAnim, contentSlideAnim]);
 
   const repo = getSyncRepository();
 
@@ -221,6 +251,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
         } catch {
           // Fallback for mock/test environments
         }
+
+      if (!hasLoadedOnce.current) {
+        // Ensure graceful skeleton display on initial landing before fluid transition
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        hasLoadedOnce.current = true;
+      }
     } catch {
       setError('Unable to refresh dashboard data. Showing cached information.');
     } finally {
@@ -286,6 +322,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Luminous Animated Dark Veil Background (Silk Folds in Pure White) */}
+      <DarkVeil
+        speed={0.35}
+        warpAmount={0.25}
+        noiseIntensity={0.01}
+        whiteMode={true}
+      />
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -329,12 +373,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
             <TouchableOpacity 
               style={styles.notificationButton}
               onPress={() => {
+                try {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                } catch {
+                  // Fallback if haptics unavailable
+                }
                 Alert.alert('Notifications', 'You have no unread notifications. All caught up!');
               }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
               accessibilityLabel="Notifications"
             >
-              <Bell size={18} color="#FFFFFF" /> 
+              <Bell size={19} color="#FFFFFF" strokeWidth={2.2} /> 
             </TouchableOpacity>
           </View>
         </View>
@@ -342,12 +393,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
         {error ? <ErrorCard message={error} onRetry={() => loadDashboardData(true)} /> : null}
 
         {isLoading ? (
-          <View>
-            <SessionCardSkeleton />
-            <WorkoutCardSkeleton />
-          </View>
+          <DashboardSkeleton />
         ) : (
-          <>
+          <Animated.View
+            style={[
+              styles.loadedContentContainer,
+              {
+                opacity: contentFadeAnim,
+                transform: [{ translateY: contentSlideAnim }],
+              },
+            ]}
+          >
             {/* Finish Profile Setup Card (for New / Incomplete Profile) */}
             {!isProfileComplete && (
               <View style={styles.profileSetupCard}>
@@ -382,8 +438,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
                   size={130}
                   strokeWidth={10}
                   showPercentageText={false}
-                  color="#FFD600"
-                  trackColor="#2C2C2E"
+                  color="#30D158"
+                  trackColor="rgba(48, 209, 88, 0.15)"
                   textColor="#FFFFFF"
                 />
                 {/* Overlay: remaining calories + LEFT label */}
@@ -435,9 +491,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
               </View>
             </View>
 
-            {/* Quick Actions Section */}
+            {/* BMI & Height/Weight Metrics */}
+            <BmiMetricSection />
+
+            {/* Features Section */}
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Quick Actions</Text>
+              <Text style={styles.sectionTitle}>Features</Text>
             </View>
 
             <View style={styles.quickActionsRow}>
@@ -554,17 +613,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
                 accessibilityRole="button"
                 accessibilityLabel="AI Coach quick action"
               >
-                <Bot size={26} color="#FFFFFF" style={styles.quickActionIcon} />
+                <Sparkles size={26} color="#BF5AF2" style={styles.quickActionIcon} />
                 <Text style={styles.quickActionTitle}>AI Coach</Text>
                 <Text style={styles.quickActionSubtitle}>Assistant</Text>
               </TouchableOpacity>
             </View>
 
-          </>
+          </Animated.View>
         )}
       </ScrollView>
 
-      {/* Profile Setup Complete Celebration Modal */}
+      {/* Profile Setup Complete Celebration Modal - Apple HIG 'What's New' Design */}
       <Modal
         visible={showCompletionModal}
         transparent={true}
@@ -572,57 +631,69 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
         onRequestClose={() => setShowCompletionModal(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalIconWrapper}>
-              <Check size={32} color="#000000" strokeWidth={3} />
+          <View style={styles.appleModalCard}>
+            {/* Apple "What's New" Header */}
+            <Text style={styles.appleModalTitle}>What’s New in GymFlow</Text>
+
+            {/* Apple Feature Rows with Signature Gold Icons */}
+            <View style={styles.appleFeatureList}>
+              {/* Feature 1: Workouts */}
+              <View style={styles.appleFeatureItem}>
+                <View style={styles.appleFeatureIconCol}>
+                  <Dumbbell size={28} color="#FFCC00" strokeWidth={2.0} />
+                </View>
+                <View style={styles.appleFeatureTextCol}>
+                  <Text style={styles.appleFeatureItemTitle}>Personalized Workout Plan</Text>
+                  <Text style={styles.appleFeatureItemDesc}>
+                    Custom routines, progressive splits, and exercise guide tailored to your biometrics.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Feature 2: Nutrition */}
+              <View style={styles.appleFeatureItem}>
+                <View style={styles.appleFeatureIconCol}>
+                  <Flame size={28} color="#FFCC00" strokeWidth={2.0} />
+                </View>
+                <View style={styles.appleFeatureTextCol}>
+                  <Text style={styles.appleFeatureItemTitle}>Caloric & Nutrition Targets</Text>
+                  <Text style={styles.appleFeatureItemDesc}>
+                    Daily caloric allowance, macro distributions, and water goals calculated and ready.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Feature 3: Biometrics / Watch */}
+              <View style={styles.appleFeatureItem}>
+                <View style={styles.appleFeatureIconCol}>
+                  <Watch size={28} color="#FFCC00" strokeWidth={2.0} />
+                </View>
+                <View style={styles.appleFeatureTextCol}>
+                  <Text style={styles.appleFeatureItemTitle}>Biometrics Configured</Text>
+                  <Text style={styles.appleFeatureItemDesc}>
+                    Biometrics saved to monitor recovery, training strain, and metabolic output.
+                  </Text>
+                </View>
+              </View>
             </View>
 
-            <Text style={styles.modalTitle}>Your Profile Setup is Now Complete!</Text>
-            <Text style={styles.modalSubtitle}>
-              Your biometrics have been saved. Your personalized workout plan and caloric targets are now active.
-            </Text>
-
-            <View style={styles.modalBiometricsGrid}>
-              <View style={styles.modalBiometricItem}>
-                <Text style={styles.modalBiometricLabel}>GENDER</Text>
-                <Text style={styles.modalBiometricValue}>
-                  {user?.gender ? (user.gender === 'male' ? 'Male' : user.gender === 'female' ? 'Female' : 'Standard') : 'Saved'}
-                </Text>
-              </View>
-              <View style={styles.modalBiometricItem}>
-                <Text style={styles.modalBiometricLabel}>BIRTHDATE</Text>
-                <Text style={styles.modalBiometricValue}>
-                  {user?.birthdate ? user.birthdate : 'Saved'}
-                </Text>
-              </View>
-              <View style={styles.modalBiometricItem}>
-                <Text style={styles.modalBiometricLabel}>WEIGHT</Text>
-                <Text style={styles.modalBiometricValue}>
-                  {user?.weight_kg ? `${user.weight_kg} kg` : 'Saved'}
-                </Text>
-              </View>
-              <View style={styles.modalBiometricItem}>
-                <Text style={styles.modalBiometricLabel}>HEIGHT</Text>
-                <Text style={styles.modalBiometricValue}>
-                  {user?.height_cm ? `${user.height_cm} cm` : 'Saved'}
-                </Text>
-              </View>
+            {/* Apple Signature Yellow Pill Button */}
+            <View style={styles.appleModalBtnRow}>
+              <TouchableOpacity
+                style={styles.appleContinueBtn}
+                onPress={() => {
+                  try {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  } catch {}
+                  setShowCompletionModal(false);
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Continue"
+              >
+                <Text style={styles.appleContinueBtnText}>Continue</Text>
+              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={styles.modalDismissBtn}
-              onPress={() => {
-                try {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                } catch {}
-                setShowCompletionModal(false);
-              }}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss modal and continue"
-            >
-              <Text style={styles.modalDismissBtnText}>Let's Get Started</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -646,7 +717,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
             </Text>
 
             <TouchableOpacity
-              style={[styles.modalDismissBtn, { backgroundColor: '#FFD600', marginBottom: 12 }]}
+              style={[styles.modalDismissBtn, { backgroundColor: '#007AFF', marginBottom: 12 }]}
               onPress={() => {
                 try {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -658,7 +729,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
               accessibilityRole="button"
               accessibilityLabel="Complete Profile Setup"
             >
-              <Text style={[styles.modalDismissBtnText, { color: '#000000', fontWeight: '800' }]}>
+              <Text style={[styles.modalDismissBtnText, { color: '#FFFFFF', fontWeight: '700' }]}>
                 Complete Profile Setup
               </Text>
             </TouchableOpacity>
@@ -692,13 +763,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
           <View style={styles.generatedWorkoutModalCard}>
             {/* Header Badge */}
             <View style={styles.generatedModalHeaderBadge}>
-              <Sparkles size={13} color="#000000" strokeWidth={2.5} />
+              <Sparkles size={13} color="#007AFF" strokeWidth={2.2} />
               <Text style={styles.generatedModalHeaderBadgeText}>PERSONALIZED WORKOUT GENERATED</Text>
             </View>
 
             {/* Icon */}
             <View style={styles.generatedWorkoutIconWrapper}>
-              <Dumbbell size={28} color="#000000" strokeWidth={2.5} />
+              <Dumbbell size={26} color="#007AFF" strokeWidth={2.2} />
             </View>
 
             <Text style={styles.generatedModalTitle}>
@@ -711,15 +782,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
             {/* Quick Metrics Row */}
             <View style={styles.generatedMetricsRow}>
               <View style={styles.generatedMetricBadge}>
-                <Clock size={12} color={colors.primary} style={{ marginRight: 4 }} />
+                <Clock size={12} color="#007AFF" style={{ marginRight: 5 }} />
                 <Text style={styles.generatedMetricBadgeText}>{pendingGeneratedWorkout?.duration_minutes || 50} min</Text>
               </View>
               <View style={styles.generatedMetricBadge}>
-                <Flame size={12} color="#FF6B00" style={{ marginRight: 4 }} />
+                <Flame size={12} color="#FF9F0A" style={{ marginRight: 5 }} />
                 <Text style={styles.generatedMetricBadgeText}>~{pendingGeneratedWorkout?.calories || 440} kcal</Text>
               </View>
               <View style={styles.generatedMetricBadge}>
-                <Dumbbell size={12} color="#00E5FF" style={{ marginRight: 4 }} />
+                <Dumbbell size={12} color="#30D158" style={{ marginRight: 5 }} />
                 <Text style={styles.generatedMetricBadgeText}>
                   {pendingGeneratedWorkout?.routineExercises?.length || 5} Exercises
                 </Text>
@@ -767,7 +838,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, ro
               accessibilityLabel="View my workouts"
             >
               <Text style={styles.generatedProceedBtnText}>View My Workouts</Text>
-              <ChevronRight size={18} color="#000000" strokeWidth={2.5} style={{ marginLeft: 4 }} />
+              <ChevronRight size={18} color="#FFFFFF" strokeWidth={2.4} style={{ marginLeft: 4 }} />
             </TouchableOpacity>
 
             {/* Direct Start Routine Option */}
@@ -820,6 +891,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+  loadedContentContainer: {
+    width: '100%',
   },
   scrollContent: {
     padding: spacing.md,
@@ -873,25 +948,46 @@ const styles = StyleSheet.create({
     color: '#FF7A00',
   },
   notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 2,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(25px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(25px) saturate(180%)',
+      transition: 'all 0.2s cubic-bezier(0.25, 1, 0.5, 1)',
+    } as any : {}),
   },
   nutritionCard: {
     flexDirection: 'row',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(14, 14, 18, 0.65)' : 'rgba(16, 16, 22, 0.78)',
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
     paddingVertical: 28,
     paddingHorizontal: 22,
     alignItems: 'center',
     marginBottom: spacing.lg,
     gap: 20,
     minHeight: 160,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 18,
+    elevation: 8,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(20px) saturate(190%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(190%)',
+    } as any : {}),
   },
   nutritionRingWrapper: {
     alignItems: 'center',
@@ -961,16 +1057,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: '#FFD600',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
     gap: 4,
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   nutritionDetailsBtnText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#000000',
   },
   sectionHeader: {
@@ -1001,14 +1102,23 @@ const styles = StyleSheet.create({
     flexBasis: '30%',
     flexGrow: 1,
     flexShrink: 0,
-    backgroundColor: '#121214',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(14, 14, 18, 0.65)' : 'rgba(16, 16, 22, 0.78)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 16,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    borderRadius: 18,
     paddingVertical: 16,
     paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 6,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(20px) saturate(190%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(190%)',
+    } as any : {}),
   },
   quickActionIcon: {
     marginBottom: 8,
@@ -1019,13 +1129,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   quickActionSubtitle: {
     fontFamily: typography.fonts.body,
     fontSize: 11,
-    color: '#71717A',
+    color: 'rgba(255, 255, 255, 0.65)',
     textAlign: 'center',
     marginTop: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   weekStripContainer: {
     flexDirection: 'row',
@@ -1081,12 +1197,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textInverse,
   },
   sessionCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: Platform.OS === 'web' ? 'rgba(14, 14, 18, 0.65)' : 'rgba(16, 16, 22, 0.78)',
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
     marginBottom: spacing.md,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 18,
+    elevation: 8,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(20px) saturate(190%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(190%)',
+    } as any : {}),
   },
   sessionMeta: {
     marginBottom: spacing.sm,
@@ -1296,11 +1421,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFD600',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 6,
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   profileSetupButtonText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
@@ -1309,21 +1439,164 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   // Modal Styles
+  // Modal Styles
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+    } as any : {}),
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 24,
-    padding: 24,
+    maxWidth: 420,
+    backgroundColor: '#2C2C2E',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    borderRadius: 28,
+    paddingTop: 30,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.55,
+    shadowRadius: 36,
+    elevation: 20,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(30px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(30px) saturate(180%)',
+    } as any : {}),
+  },
+  // Apple "What's New in Notes" Style Modal
+  appleModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#2C2C2E', // Apple Dark Secondary System Background
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    borderRadius: 28,
+    paddingTop: 30,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.55,
+    shadowRadius: 36,
+    elevation: 20,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(30px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(30px) saturate(180%)',
+    } as any : {}),
+  },
+  appleModalTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'left',
+    letterSpacing: -0.4,
+    marginBottom: 26,
+  },
+  appleFeatureList: {
+    width: '100%',
+    gap: 22,
+    marginBottom: 32,
+  },
+  appleFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  appleFeatureIconCol: {
+    width: 44,
     alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 2,
+    marginRight: 10,
+  },
+  appleFeatureTextCol: {
+    flex: 1,
+  },
+  appleFeatureItemTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+    marginBottom: 3,
+  },
+  appleFeatureItemDesc: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 13,
+    color: 'rgba(235, 235, 245, 0.60)',
+    lineHeight: 18,
+    letterSpacing: -0.1,
+  },
+  appleBiometricsRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.32)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginBottom: 24,
+    width: '100%',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  appleBiometricItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  appleBiometricDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  appleBiometricLabel: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: 'rgba(235, 235, 245, 0.45)',
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  appleBiometricValue: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontVariant: ['tabular-nums'],
+  },
+  appleModalBtnRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  appleContinueBtn: {
+    backgroundColor: '#FFCC00', // Apple Notes Signature Amber Yellow
+    borderRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  appleContinueBtnText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#000000',
+    letterSpacing: -0.2,
   },
   modalIconWrapper: {
     width: 64,
@@ -1418,64 +1691,74 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#9E9E9E',
   },
-  // Generated Workout Modal Styles
+  // Generated Workout Modal Styles (Apple HIG Design)
   generatedWorkoutModalCard: {
     width: '100%',
     maxHeight: '90%',
-    backgroundColor: '#141416',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 214, 0, 0.4)',
-    borderRadius: 24,
+    backgroundColor: 'rgba(28, 28, 30, 0.96)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    borderRadius: 28,
     padding: 22,
     alignItems: 'center',
-    shadowColor: '#FFD600',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
     elevation: 10,
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(25px)',
+          WebkitBackdropFilter: 'blur(25px)',
+        } as any)
+      : {}),
   },
   generatedModalHeaderBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFD600',
+    backgroundColor: 'rgba(0, 122, 255, 0.14)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0, 122, 255, 0.3)',
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 12,
     gap: 6,
-    marginBottom: 14,
+    marginBottom: 16,
   },
   generatedModalHeaderBadgeText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#000000',
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#007AFF',
     letterSpacing: 0.6,
   },
   generatedWorkoutIconWrapper: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#FFFFFF',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0, 122, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   generatedModalTitle: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 6,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   generatedModalSubtitle: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 13,
-    color: '#9E9E9E',
+    fontSize: 13.5,
+    color: 'rgba(255, 255, 255, 0.55)',
     textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 14,
+    lineHeight: 19,
+    marginBottom: 16,
     paddingHorizontal: 8,
   },
   generatedMetricsRow: {
@@ -1489,41 +1772,41 @@ const styles = StyleSheet.create({
   generatedMetricBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E1E22',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
   },
   generatedMetricBadgeText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   generatedExercisesList: {
     width: '100%',
-    backgroundColor: '#18181C',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 14,
-    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    padding: 14,
     marginBottom: 18,
-    gap: 8,
+    gap: 10,
   },
   generatedExercisesHeading: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#777777',
-    letterSpacing: 0.6,
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.45)',
+    letterSpacing: 0.8,
     marginBottom: 2,
   },
   generatedExerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   generatedExerciseNumberBadge: {
     width: 22,
@@ -1541,78 +1824,85 @@ const styles = StyleSheet.create({
   },
   generatedExerciseName: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
   generatedExerciseMeta: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 11,
-    color: '#8E8E93',
+    fontSize: 11.5,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 1,
   },
   generatedMusclePill: {
-    backgroundColor: 'rgba(255, 214, 0, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   generatedMusclePillText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFD600',
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   generatedMoreExercisesText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 11,
-    color: '#777777',
+    fontSize: 11.5,
+    color: 'rgba(255, 255, 255, 0.4)',
     textAlign: 'center',
     marginTop: 2,
-    fontStyle: 'italic',
   },
   generatedProceedBtn: {
     width: '100%',
-    backgroundColor: '#FFD600',
+    backgroundColor: '#007AFF',
     borderRadius: 14,
-    paddingVertical: 14,
+    height: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
   },
   generatedProceedBtnText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#000000',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
   },
   generatedStartDirectBtn: {
     width: '100%',
-    backgroundColor: '#1E1E22',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 14,
-    paddingVertical: 12,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   generatedStartDirectBtnText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   generatedDismissBtn: {
     width: '100%',
-    paddingVertical: 8,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   generatedDismissBtnText: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
     fontSize: 13,
-    fontWeight: '600',
-    color: '#8E8E93',
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.5)',
   },
 });

@@ -138,21 +138,8 @@ export function mergeWorkouts(
     }
   }
 
-  // Include any custom MSW workouts that didn't match a guide slug
-  for (const msw of mswWorkouts) {
-    const slug = msw.slug || MSW_SLUG_MAP[msw.id];
-    if (!slug || !processedSlugs.has(slug)) {
-      merged.unshift({
-        ...msw,
-        slug: slug || 'general-fitness',
-        primaryMuscle: msw.category,
-        secondaryMuscles: [],
-        equipment: 'Gym Equipment',
-        exerciseType: 'weight_reps',
-        is_favorite: Boolean(msw.is_favorite),
-      });
-    }
-  }
+  // Only real exercises with valid slugs from @bryllim/workout-guide (which have animated demonstration frames/GIFs)
+  // are included. Unmapped generic routines without animations (e.g. "Core & Stability", "Strength Foundation") are excluded.
 
   return merged;
 }

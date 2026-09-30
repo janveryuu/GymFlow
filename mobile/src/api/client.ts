@@ -8,8 +8,22 @@ import { useDevMockStore } from '../store/devMockStore';
  * 1. Use `extra.apiBaseUrl` from app.json / app.config.js if available
  * 2. Fall back to the production placeholder (will be intercepted by MSW in dev)
  */
-const BASE_URL =
-  Constants.expoConfig?.extra?.apiBaseUrl ?? 'https://api.gymflow.app';
+import { Platform } from 'react-native';
+
+const resolveBaseUrl = (): string => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `http://${hostname}:8000`;
+    }
+  }
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8000';
+  }
+  return Constants.expoConfig?.extra?.apiBaseUrl ?? 'http://127.0.0.1:8000';
+};
+
+const BASE_URL = resolveBaseUrl();
 const AUTH_TOKEN_KEY = 'gymflow_auth_token';
 
 /**

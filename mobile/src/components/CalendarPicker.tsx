@@ -6,7 +6,7 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight } from './icons';
 import { colors, typography, borderRadius, spacing } from '../theme';
 
 interface CalendarPickerProps {

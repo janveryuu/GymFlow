@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { CameraView, CameraRef, useCameraPermissions } from 'expo-camera';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, Camera, AlertCircle, CheckCircle, Edit2 } from 'lucide-react-native';
+import { ArrowLeft, Camera, AlertCircle, CheckCircle, Edit2 } from '../components/icons';
 import { colors, typography, borderRadius } from '../theme';
 import { getDatabase } from '../db/connection';
 import * as Crypto from 'expo-crypto';

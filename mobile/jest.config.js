@@ -45,7 +45,7 @@ module.exports = {
     '\\.mjs$': preset.transform['\\.[jt]sx?$'],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|moti|@tanstack|zustand|react-native-worklets|msw|@mswjs/.*|@open-draft/.*|rettime|until-async|lucide-react-native|victory-native|@shopify/.*)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|moti|@tanstack|zustand|react-native-worklets|msw|@mswjs/.*|@open-draft/.*|rettime|until-async|expo-symbols|victory-native|@shopify/.*)',
   ],
   testMatch: [
     '<rootDir>/tests/**/*.test.[jt]s?(x)',

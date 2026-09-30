@@ -16,7 +16,7 @@ import {
   ScanBarcode,
   PenLine,
   X,
-} from 'lucide-react-native';
+} from './icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';

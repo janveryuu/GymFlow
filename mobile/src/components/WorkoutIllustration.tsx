@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet, TouchableOpacity, StyleProp, ViewStyle, ImageStyle } from 'react-native';
-import { Dumbbell } from 'lucide-react-native';
+import { Dumbbell } from './icons';
 import { getLocalWorkoutFrame } from '../assets/workoutAssetMap';
 import { colors, borderRadius } from '../theme';
 

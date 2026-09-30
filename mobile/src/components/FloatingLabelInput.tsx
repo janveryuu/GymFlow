@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { AlertCircle } from 'lucide-react-native';
+import { AlertCircle } from './icons';
 import { colors, typography, borderRadius } from '../theme';
 
 interface FloatingLabelInputProps {

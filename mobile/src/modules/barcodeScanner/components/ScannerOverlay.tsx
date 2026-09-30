@@ -14,7 +14,7 @@ import {
   Dimensions,
   Easing,
 } from 'react-native';
-import { ArrowLeft, Zap, ZapOff } from 'lucide-react-native';
+import { ArrowLeft, Zap, ZapOff } from '../../../components/icons';
 import { colors, typography, borderRadius } from '../../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

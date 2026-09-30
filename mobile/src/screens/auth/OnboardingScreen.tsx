@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  ChevronLeft,
   ArrowRight,
   ArrowLeft,
   AlertCircle,
@@ -25,13 +26,16 @@ import {
   Flame,
   Activity,
   Check,
-} from 'lucide-react-native';
+  User,
+  Shield,
+} from '../../components/icons';
 import * as Haptics from 'expo-haptics';
 import { colors, typography, borderRadius, spacing } from '../../theme';
 import { FloatingLabelInput } from '../../components/FloatingLabelInput';
 import { useCustomWorkoutsStore, CustomRoutineWorkout, CustomExerciseItem } from '../../store/customWorkoutsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useDevMockStore } from '../../store/devMockStore';
+import { ThoughtLine } from '../../components/ThoughtLine';
 
 interface OnboardingScreenProps {
   route?: {
@@ -42,6 +46,166 @@ interface OnboardingScreenProps {
   navigation: any;
 }
 
+const APPLE_FONT_FAMILY = Platform.OS === 'web'
+  ? '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif'
+  : Platform.OS === 'ios'
+  ? 'System'
+  : 'Roboto';
+
+/**
+ * Animated Step Title Group matching ProfileSetupScreen UI/UX (+20px to 0px fade)
+ */
+interface StepTitleGroupProps {
+  title: string;
+  subtitle?: string;
+  stepKey: number;
+}
+
+const StepTitleGroup: React.FC<StepTitleGroupProps> = ({ title, subtitle, stepKey }) => {
+  const entranceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    entranceAnim.setValue(0);
+    Animated.timing(entranceAnim, {
+      toValue: 1,
+      duration: 300,
+      easing: Easing.bezier(0.32, 0.72, 0, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [stepKey]);
+
+  const translateY = entranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.centeredTitleGroup,
+        {
+          opacity: entranceAnim,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      <Text style={styles.centeredStepTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.stepSubtitleText}>{subtitle}</Text> : null}
+    </Animated.View>
+  );
+};
+
+/**
+ * Apple Inset Grouped Selection Card with:
+ * - Tap Physics: spring scale to 0.97 on press
+ * - Staggered Entrance: +20px to 0px fade with 50ms delay
+ * - iOS dark translucent background rgba(28, 28, 30, 0.8) & 16px squircle
+ * - Neutral translucent icon box background rgba(255, 255, 255, 0.08)
+ * - Right-aligned checkmark.circle.fill on selection
+ */
+interface AppleSelectionCardProps {
+  isSelected: boolean;
+  onPress: () => void;
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  title: string;
+  subtitle?: string;
+  desc?: string;
+  tag?: string;
+  hasError?: boolean;
+  index: number;
+  stepKey: number;
+}
+
+const AppleSelectionCard: React.FC<AppleSelectionCardProps> = ({
+  isSelected,
+  onPress,
+  icon: IconComponent,
+  title,
+  desc,
+  hasError,
+  index,
+  stepKey,
+}) => {
+  const pressScale = useRef(new Animated.Value(1)).current;
+  const entranceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    entranceAnim.setValue(0);
+    const timer = setTimeout(() => {
+      Animated.timing(entranceAnim, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.bezier(0.32, 0.72, 0, 1),
+        useNativeDriver: true,
+      }).start();
+    }, 50 * (index + 1));
+    return () => clearTimeout(timer);
+  }, [stepKey, index]);
+
+  const handlePressIn = () => {
+    Animated.spring(pressScale, {
+      toValue: 0.97,
+      friction: 8,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressScale, {
+      toValue: 1,
+      friction: 8,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const translateY = entranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+
+  return (
+    <Animated.View
+      style={{
+        opacity: entranceAnim,
+        transform: [{ translateY }, { scale: pressScale }],
+      }}
+    >
+      <TouchableOpacity
+        style={[
+          styles.optionCard,
+          isSelected && styles.optionCardSelected,
+          hasError && styles.optionCardError,
+        ]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.9}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+      >
+        <View style={styles.optionIconBox}>
+          <IconComponent size={22} color="rgba(255, 255, 255, 0.6)" strokeWidth={2} />
+        </View>
+        <View style={styles.optionContent}>
+          <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
+            {title}
+          </Text>
+          {desc ? <Text style={styles.optionDesc}>{desc}</Text> : null}
+        </View>
+        <View style={styles.checkCircleWrapper}>
+          {isSelected ? (
+            <CheckCircle2 size={22} color="#007AFF" />
+          ) : (
+            <View style={styles.unselectedRing} />
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 // -------------------------------------------------------------
 // QUESTION DATA DEFINITIONS
 // -------------------------------------------------------------
@@ -49,26 +213,26 @@ const BODY_TYPE_OPTIONS = [
   {
     id: 'thin',
     title: 'Thin',
-    subtitle: 'Slender Frame / Fast Metabolism',
     desc: 'Naturally lean with a fast metabolism. Focuses on progressive overload, hypertrophy, and building clean athletic muscle.',
+    icon: Activity,
   },
   {
     id: 'regular',
     title: 'Regular',
-    subtitle: 'Balanced / Medium Athletic Build',
     desc: 'Evenly proportioned with standard metabolism. Thrives on balanced resistance training to build strength and sculpt definition.',
+    icon: User,
   },
   {
     id: 'rounded',
     title: 'Rounded',
-    subtitle: 'Curvier / Soft Frame',
     desc: 'Naturally holds weight around midsection or hips. Thrives on high-density circuits to torch body fat and sculpt tone.',
+    icon: Flame,
   },
   {
     id: 'plus_size',
     title: 'Plus Size',
-    subtitle: 'Heavier Frame / High Strength Base',
     desc: 'Broad, sturdy build with natural lifting leverage. Focuses on joint-friendly compound lifting, stamina, and progressive recomposition.',
+    icon: Shield,
   },
 ];
 
@@ -76,20 +240,20 @@ const FITNESS_LEVEL_OPTIONS = [
   {
     id: 'beginner',
     title: 'Beginner',
-    subtitle: '0 – 6 months experience',
     desc: 'Building a consistent routine, mastering lifting mechanics, and priming neurological adaptations.',
+    icon: Shield,
   },
   {
     id: 'intermediate',
     title: 'Intermediate',
-    subtitle: '6 months – 2 years',
     desc: 'Comfortable with compound barbell & dumbbell lifts. Consistently applying progressive overload.',
+    icon: Activity,
   },
   {
     id: 'advanced',
     title: 'Advanced',
-    subtitle: '2+ years continuous training',
     desc: 'Experienced lifter with high volume tolerance, RPE auto-regulation, and specialized split goals.',
+    icon: Zap,
   },
 ];
 
@@ -98,21 +262,25 @@ const DAYS_PER_WEEK_OPTIONS = [
     id: '2-3',
     title: '2 – 3 Days / week',
     desc: 'Ideal for building consistency with plenty of recovery days between workouts.',
+    icon: Calendar,
   },
   {
     id: '4',
     title: '4 Days / week',
     desc: 'The sweet spot for building strength and muscle with balanced rest.',
+    icon: Activity,
   },
   {
     id: '5',
     title: '5 Days / week',
     desc: 'High-frequency routine for dedicated athletes targeting maximum progress.',
+    icon: Flame,
   },
   {
     id: '6',
     title: '6 Days / week',
     desc: 'Maximum weekly training volume and conditioning for advanced lifters.',
+    icon: Zap,
   },
 ];
 
@@ -120,26 +288,26 @@ const TRAINING_TYPE_OPTIONS = [
   {
     id: 'hypertrophy',
     title: 'Strength & Hypertrophy',
-    subtitle: 'Muscle Building & Aesthetics',
     desc: 'Heavy compound lifts paired with targeted isolation sets (8–15 reps) for optimal hypertrophy.',
+    icon: Dumbbell,
   },
   {
     id: 'powerlifting',
     title: 'Powerlifting & Heavy Compounds',
-    subtitle: 'Max Strength & Big 3',
     desc: 'Focus on squat, bench press, deadlift, and explosive neurological force production.',
+    icon: Zap,
   },
   {
     id: 'hiit',
     title: 'HIIT & Functional Conditioning',
-    subtitle: 'Athleticism & Stamina',
     desc: 'High-density circuits, explosive athletic movements, and metabolic fat burning.',
+    icon: Flame,
   },
   {
     id: 'calisthenics',
     title: 'Calisthenics & Bodyweight',
-    subtitle: 'Relative Strength & Control',
     desc: 'Gymnastic movements, pull-up progressions, core compression, and functional joint health.',
+    icon: Activity,
   },
 ];
 
@@ -147,26 +315,26 @@ const FITNESS_GOAL_OPTIONS = [
   {
     id: 'build_muscle',
     title: 'Build Muscle & Strength',
-    subtitle: 'Hypertrophy & Mass',
     desc: 'Increase lean muscle tissue, break lifting plateaus, and sculpt athletic muscularity.',
+    icon: Dumbbell,
   },
   {
     id: 'lose_fat',
     title: 'Lose Body Fat & Get Toned',
-    subtitle: 'Recomposition & Definition',
     desc: 'Burn calories through metabolic training while preserving lean muscle definition.',
+    icon: Flame,
   },
   {
     id: 'athletic',
     title: 'Increase Athletic Performance',
-    subtitle: 'Speed, Power & Agility',
     desc: 'Build explosive power, movement capacity, and resilience for sports and life.',
+    icon: Zap,
   },
   {
     id: 'health',
     title: 'Health & Longevity',
-    subtitle: 'Daily Energy & Vitality',
     desc: 'Sustainable functional fitness to boost daily energy, posture, and cardiovascular health.',
+    icon: Activity,
   },
 ];
 
@@ -174,16 +342,14 @@ const GENERATE_WORKOUT_OPTIONS = [
   {
     id: 'yes',
     title: 'Generate me a personalized workout',
-    subtitle: 'Recommended • GymFlow AI Powered',
     desc: 'Our AI engine will calibrate your exercises, sets, reps, and weekly volume tailored to your body type, goals, and training frequency.',
-    badge: 'RECOMMENDED',
+    icon: Sparkles,
   },
   {
     id: 'no',
     title: 'No (for experienced lifters)',
-    subtitle: 'Self-Guided & Custom Routines',
     desc: 'I already have my own workout split and know what I want to train. Take me straight to the app without generating an AI routine.',
-    badge: 'SELF-GUIDED',
+    icon: Activity,
   },
 ];
 
@@ -242,6 +408,22 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
   const dotAnim3 = useRef(new Animated.Value(0.3)).current;
   const cardScaleAnims = useRef<Record<string, Animated.Value>>({}).current;
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Progress bar animation matching ProfileSetupScreen
+  const progressAnim = useRef(new Animated.Value(1 / totalQuestionSteps)).current;
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: currentStep / totalQuestionSteps,
+      duration: 300,
+      easing: Easing.bezier(0.32, 0.72, 0, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [currentStep, totalQuestionSteps]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   // Automatically scroll to top on step transitions so titles never get scrolled out of view
   useEffect(() => {
@@ -374,14 +556,14 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 130,
-        easing: Easing.in(Easing.ease),
+        duration: 140,
+        easing: Easing.bezier(0.32, 0.72, 0, 1),
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(slideAnim, {
         toValue: exitOffset,
-        duration: 130,
-        easing: Easing.in(Easing.ease),
+        duration: 140,
+        easing: Easing.bezier(0.32, 0.72, 0, 1),
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start(() => {
@@ -391,14 +573,14 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 220,
-          easing: Easing.out(Easing.ease),
+          duration: 240,
+          easing: Easing.bezier(0.32, 0.72, 0, 1),
           useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 220,
-          easing: Easing.out(Easing.ease),
+          duration: 240,
+          easing: Easing.bezier(0.32, 0.72, 0, 1),
           useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start();
@@ -728,33 +910,29 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Top Header with Back button, Step Progress Bars, and Counter */}
+        {/* Standard iOS Navigation Header & Continuous Slim Animated Progress Bar */}
         {currentStep <= 7 && (
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backButton}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <ArrowLeft size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-
-            <View style={styles.progressTrackContainer}>
-              {Array.from({ length: totalQuestionSteps }, (_, i) => i + 1).map((step) => (
-                <View
-                  key={step}
-                  style={[
-                    styles.progressBarSegment,
-                    step <= currentStep && styles.progressBarSegmentActive,
-                  ]}
-                />
-              ))}
+            <View style={styles.navBar}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={handleBack}
+                activeOpacity={0.6}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
+                <ChevronLeft size={24} color="#007AFF" />
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.stepBadge}>
-              <Text style={styles.stepBadgeText}>STEP {currentStep} OF {totalQuestionSteps}</Text>
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  { width: progressWidth },
+                ]}
+              />
             </View>
           </View>
         )}
@@ -767,6 +945,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             styles.scrollContent,
             currentStep === 8 && styles.centerScrollContent,
           ]}
+          showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View
@@ -784,9 +963,11 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             {/* ============================================================ */}
             {currentStep === 1 && (
               <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>What&apos;s your name?</Text>
-                </View>
+                <StepTitleGroup
+                  title="What's your name?"
+                  subtitle="We'll use this to personalize your training dashboard and AI coach experience."
+                  stepKey={currentStep}
+                />
 
                 <View style={styles.fieldsContainer}>
                   <FloatingLabelInput
@@ -826,38 +1007,26 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             {/* ============================================================ */}
             {currentStep === 2 && (
               <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>Choose your body type</Text>
-                </View>
+                <StepTitleGroup
+                  title="Choose your body type"
+                  subtitle="Calibrates your baseline metabolic rate and progressive overload parameters."
+                  stepKey={currentStep}
+                />
 
                 <View style={styles.optionsStack}>
-                  {BODY_TYPE_OPTIONS.map((item) => {
-                    const isSelected = bodyType === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.selectableCard,
-                          isSelected && styles.selectableCardActive,
-                          bodyTypeError && !bodyType && styles.selectableCardError,
-                        ]}
-                        onPress={() => handleOptionSelect(setBodyType, item.id, setBodyTypeError)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                          <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                            {item.title}
-                          </Text>
-                          <Text style={styles.optionSubtitleText}>{item.subtitle}</Text>
-                          <Text style={styles.optionDescText}>{item.desc}</Text>
-                        </View>
-
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                          {isSelected && <View style={styles.radioInner} />}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {BODY_TYPE_OPTIONS.map((item, idx) => (
+                    <AppleSelectionCard
+                      key={item.id}
+                      index={idx}
+                      stepKey={currentStep}
+                      isSelected={bodyType === item.id}
+                      onPress={() => handleOptionSelect(setBodyType, item.id, setBodyTypeError)}
+                      icon={item.icon}
+                      title={item.title}
+                      desc={item.desc}
+                      hasError={bodyTypeError && !bodyType}
+                    />
+                  ))}
                 </View>
               </View>
             )}
@@ -867,38 +1036,26 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             {/* ============================================================ */}
             {currentStep === 3 && (
               <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>Describe your fitness level</Text>
-                </View>
+                <StepTitleGroup
+                  title="Describe your fitness level"
+                  subtitle="Helps us tailor your routine's starting volume, exercise complexity, and recovery rates."
+                  stepKey={currentStep}
+                />
 
                 <View style={styles.optionsStack}>
-                  {FITNESS_LEVEL_OPTIONS.map((item) => {
-                    const isSelected = fitnessLevel === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.selectableCard,
-                          isSelected && styles.selectableCardActive,
-                          fitnessLevelError && !fitnessLevel && styles.selectableCardError,
-                        ]}
-                        onPress={() => handleOptionSelect(setFitnessLevel, item.id, setFitnessLevelError)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                          <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                            {item.title}
-                          </Text>
-                          <Text style={styles.optionSubtitleText}>{item.subtitle}</Text>
-                          <Text style={styles.optionDescText}>{item.desc}</Text>
-                        </View>
-
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                          {isSelected && <View style={styles.radioInner} />}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {FITNESS_LEVEL_OPTIONS.map((item, idx) => (
+                    <AppleSelectionCard
+                      key={item.id}
+                      index={idx}
+                      stepKey={currentStep}
+                      isSelected={fitnessLevel === item.id}
+                      onPress={() => handleOptionSelect(setFitnessLevel, item.id, setFitnessLevelError)}
+                      icon={item.icon}
+                      title={item.title}
+                      desc={item.desc}
+                      hasError={fitnessLevelError && !fitnessLevel}
+                    />
+                  ))}
                 </View>
               </View>
             )}
@@ -908,37 +1065,26 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             {/* ============================================================ */}
             {currentStep === 4 && (
               <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>How many days per week?</Text>
-                </View>
+                <StepTitleGroup
+                  title="How many days per week?"
+                  subtitle="Determines your training frequency and workout split distribution."
+                  stepKey={currentStep}
+                />
 
                 <View style={styles.optionsStack}>
-                  {DAYS_PER_WEEK_OPTIONS.map((item) => {
-                    const isSelected = daysPerWeek === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.selectableCard,
-                          isSelected && styles.selectableCardActive,
-                          daysPerWeekError && !daysPerWeek && styles.selectableCardError,
-                        ]}
-                        onPress={() => handleOptionSelect(setDaysPerWeek, item.id, setDaysPerWeekError)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                          <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                            {item.title}
-                          </Text>
-                          <Text style={styles.optionDescText}>{item.desc}</Text>
-                        </View>
-
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                          {isSelected && <View style={styles.radioInner} />}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {DAYS_PER_WEEK_OPTIONS.map((item, idx) => (
+                    <AppleSelectionCard
+                      key={item.id}
+                      index={idx}
+                      stepKey={currentStep}
+                      isSelected={daysPerWeek === item.id}
+                      onPress={() => handleOptionSelect(setDaysPerWeek, item.id, setDaysPerWeekError)}
+                      icon={item.icon}
+                      title={item.title}
+                      desc={item.desc}
+                      hasError={daysPerWeekError && !daysPerWeek}
+                    />
+                  ))}
                 </View>
               </View>
             )}
@@ -948,38 +1094,26 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             {/* ============================================================ */}
             {currentStep === 5 && (
               <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>Preferred training style</Text>
-                </View>
+                <StepTitleGroup
+                  title="Preferred training style"
+                  subtitle="Select the primary stimulus and movement modality for your workouts."
+                  stepKey={currentStep}
+                />
 
                 <View style={styles.optionsStack}>
-                  {TRAINING_TYPE_OPTIONS.map((item) => {
-                    const isSelected = trainingType === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.selectableCard,
-                          isSelected && styles.selectableCardActive,
-                          trainingTypeError && !trainingType && styles.selectableCardError,
-                        ]}
-                        onPress={() => handleOptionSelect(setTrainingType, item.id, setTrainingTypeError)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                          <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                            {item.title}
-                          </Text>
-                          <Text style={styles.optionSubtitleText}>{item.subtitle}</Text>
-                          <Text style={styles.optionDescText}>{item.desc}</Text>
-                        </View>
-
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                          {isSelected && <View style={styles.radioInner} />}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {TRAINING_TYPE_OPTIONS.map((item, idx) => (
+                    <AppleSelectionCard
+                      key={item.id}
+                      index={idx}
+                      stepKey={currentStep}
+                      isSelected={trainingType === item.id}
+                      onPress={() => handleOptionSelect(setTrainingType, item.id, setTrainingTypeError)}
+                      icon={item.icon}
+                      title={item.title}
+                      desc={item.desc}
+                      hasError={trainingTypeError && !trainingType}
+                    />
+                  ))}
                 </View>
               </View>
             )}
@@ -989,38 +1123,26 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             {/* ============================================================ */}
             {currentStep === 6 && (
               <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>What is your main goal?</Text>
-                </View>
+                <StepTitleGroup
+                  title="What is your main goal?"
+                  subtitle="We'll tune progressive intensity and rep targets to hit your objective."
+                  stepKey={currentStep}
+                />
 
                 <View style={styles.optionsStack}>
-                  {FITNESS_GOAL_OPTIONS.map((item) => {
-                    const isSelected = fitnessGoal === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.selectableCard,
-                          isSelected && styles.selectableCardActive,
-                          fitnessGoalError && !fitnessGoal && styles.selectableCardError,
-                        ]}
-                        onPress={() => handleOptionSelect(setFitnessGoal, item.id, setFitnessGoalError)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                          <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                            {item.title}
-                          </Text>
-                          <Text style={styles.optionSubtitleText}>{item.subtitle}</Text>
-                          <Text style={styles.optionDescText}>{item.desc}</Text>
-                        </View>
-
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                          {isSelected && <View style={styles.radioInner} />}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {FITNESS_GOAL_OPTIONS.map((item, idx) => (
+                    <AppleSelectionCard
+                      key={item.id}
+                      index={idx}
+                      stepKey={currentStep}
+                      isSelected={fitnessGoal === item.id}
+                      onPress={() => handleOptionSelect(setFitnessGoal, item.id, setFitnessGoalError)}
+                      icon={item.icon}
+                      title={item.title}
+                      desc={item.desc}
+                      hasError={fitnessGoalError && !fitnessGoal}
+                    />
+                  ))}
                 </View>
               </View>
             )}
@@ -1030,51 +1152,26 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             {/* ============================================================ */}
             {currentStep === 7 && (
               <View style={styles.stepContainer}>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.title}>Do you want me to generate you a personalized workout?</Text>
-                  <Text style={styles.subtitle}>
-                    Choose whether GymFlow AI should build a custom training protocol for you or if you prefer self-guided routines.
-                  </Text>
-                </View>
+                <StepTitleGroup
+                  title="Generate personalized workout?"
+                  subtitle="Choose whether GymFlow AI should build a custom training protocol for you or if you prefer self-guided routines."
+                  stepKey={currentStep}
+                />
 
                 <View style={styles.optionsStack}>
-                  {GENERATE_WORKOUT_OPTIONS.map((item) => {
-                    const isSelected = generateWorkoutPreference === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.selectableCard,
-                          styles.generationOptionCard,
-                          isSelected && styles.selectableCardActive,
-                          generateWorkoutPreferenceError && !generateWorkoutPreference && styles.selectableCardError,
-                        ]}
-                        onPress={() => handleOptionSelect(setGenerateWorkoutPreference, item.id, setGenerateWorkoutPreferenceError)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                          <View style={styles.optionHeaderRow}>
-                            <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                              {item.title}
-                            </Text>
-                            {item.badge && (
-                              <View style={[styles.optionBadgePill, item.id === 'yes' ? styles.optionBadgePillYes : styles.optionBadgePillNo]}>
-                                <Text style={[styles.optionBadgePillText, item.id === 'yes' ? styles.optionBadgePillTextYes : styles.optionBadgePillTextNo]}>
-                                  {item.badge}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                          <Text style={styles.optionSubtitleText}>{item.subtitle}</Text>
-                          <Text style={styles.optionDescText}>{item.desc}</Text>
-                        </View>
-
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                          {isSelected && <View style={styles.radioInner} />}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {GENERATE_WORKOUT_OPTIONS.map((item, idx) => (
+                    <AppleSelectionCard
+                      key={item.id}
+                      index={idx}
+                      stepKey={currentStep}
+                      isSelected={generateWorkoutPreference === item.id}
+                      onPress={() => handleOptionSelect(setGenerateWorkoutPreference, item.id, setGenerateWorkoutPreferenceError)}
+                      icon={item.icon}
+                      title={item.title}
+                      desc={item.desc}
+                      hasError={generateWorkoutPreferenceError && !generateWorkoutPreference}
+                    />
+                  ))}
                 </View>
               </View>
             )}
@@ -1084,132 +1181,57 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
             {/* ============================================================ */}
             {currentStep === 8 && (
               <View style={styles.agenticContainer}>
-                {/* Header Block */}
-                <View style={styles.agenticHeaderBlock}>
-                  <Text style={styles.agenticTitle}>Synthesizing AI Protocol</Text>
-                  <Text style={styles.agenticSubtitle}>
-                    GymFlow AI is designing your personalized{' '}
-                    {daysPerWeek === '2-3' ? '3-4' : daysPerWeek || '3-4'}-day workout split.
-                  </Text>
-                  <View style={styles.agenticDotsRow}>
-                    <Animated.View style={[styles.agenticDot, { opacity: dotAnim1 }]} />
-                    <Animated.View style={[styles.agenticDot, { opacity: dotAnim2 }]} />
-                    <Animated.View style={[styles.agenticDot, { opacity: dotAnim3 }]} />
-                  </View>
-                </View>
-
-                {/* Vertical Connected Timeline */}
-                <View style={styles.agenticTimelineContainer}>
-                  {[
-                    {
-                      title: `Analyzing training frequency (${daysPerWeek === '2-3' ? '3-4' : daysPerWeek || '3-4'} days/wk)`,
-                      desc: 'Determining optimal split type and recovery windows',
-                    },
-                    {
-                      title: `Calibrating ${(fitnessLevel || 'intermediate').toUpperCase()} intensity`,
-                      desc: 'Setting load, sets, reps, and rest period parameters',
-                    },
-                    {
-                      title: 'Designing multi-day workout split',
-                      desc: 'Distributing muscle groups across training days for balanced recovery',
-                    },
-                    {
-                      title: 'Selecting exercises & programming volume',
-                      desc: 'Pairing compound lifts with targeted accessories for each day',
-                    },
-                    {
-                      title: 'Finalizing AI personalized protocol',
-                      desc: 'Validating weekly volume, exercise order, and biomechanical balance',
-                    },
-                  ].map((step, idx, arr) => {
-                    const isDone = agentStepIndex > idx;
-                    const isCurrent = agentStepIndex === idx;
-                    const isLast = idx === arr.length - 1;
-
-                    return (
-                      <View key={idx} style={styles.timelineItemRow}>
-                        <View style={styles.timelineNodeCol}>
-                          <View style={styles.timelineCircleWrapper}>
-                            {isDone ? (
-                              <View style={styles.timelineDoneCircle}>
-                                <Check size={11} color="#FFFFFF" strokeWidth={3.5} />
-                              </View>
-                            ) : isCurrent ? (
-                              <Animated.View
-                                style={[
-                                  styles.timelineSpinnerCircle,
-                                  { transform: [{ rotate: spinInterpolation }] },
-                                ]}
-                              />
-                            ) : (
-                              <View style={styles.timelinePendingDot} />
-                            )}
-                          </View>
-
-                          {!isLast && (
-                            <View
-                              style={[
-                                styles.timelineConnectorLine,
-                                isDone ? styles.timelineConnectorLineDone : styles.timelineConnectorLinePending,
-                              ]}
-                            />
-                          )}
-                        </View>
-
-                        <View style={styles.timelineTextContent}>
-                          <Text
-                            style={[
-                              styles.timelineStepTitle,
-                              (isDone || isCurrent) ? styles.timelineStepTitleActive : styles.timelineStepTitlePending,
-                            ]}
-                          >
-                            {step.title}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.timelineStepSubtitle,
-                              (isDone || isCurrent) ? styles.timelineStepSubtitleActive : styles.timelineStepSubtitlePending,
-                            ]}
-                          >
-                            {step.desc}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
+                {/* Modern ThoughtLine Component */}
+                <ThoughtLine
+                  label="Thinking..."
+                  doneLabel="Thought for"
+                  working={agentStepIndex < 5}
+                  currentStepIndex={agentStepIndex}
+                  steps={[
+                    'Analyzing training frequency',
+                    `Calibrating ${(fitnessLevel || 'intermediate')} intensity`,
+                    `Designing ${daysPerWeek === '2-3' ? '3-4' : daysPerWeek || '3-4'}-day workout split`,
+                    'Selecting exercises & volume',
+                    'Finalizing personalized protocol',
+                  ]}
+                  collapsible={true}
+                  style={{ alignSelf: 'center', marginTop: 30 }}
+                />
               </View>
             )}
           </Animated.View>
         </ScrollView>
 
-        {/* Bottom Navigation Bar for steps 1-7 */}
+        {/* Bottom CTA Button matching ProfileSetupScreen */}
         {currentStep <= 7 && (
-          <View style={styles.bottomBar}>
+          <View style={styles.footer}>
             {globalError ? (
               <View style={styles.globalErrorBanner}>
-                <AlertCircle size={15} color={colors.error} style={{ marginRight: 6 }} />
+                <AlertCircle size={15} color="#FF3B30" style={{ marginRight: 6 }} />
                 <Text style={styles.globalErrorText}>{globalError}</Text>
               </View>
             ) : null}
 
             <TouchableOpacity
-              style={styles.continueBtn}
+              style={styles.primaryButton}
               onPress={handleNext}
-              activeOpacity={0.85}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                currentStep === 7
+                  ? generateWorkoutPreference === 'no'
+                    ? 'Continue to App'
+                    : 'Generate My Plan'
+                  : 'Continue'
+              }
             >
-              <Text style={styles.continueBtnText}>
+              <Text style={styles.primaryButtonText}>
                 {currentStep === 7
                   ? generateWorkoutPreference === 'no'
                     ? 'Continue to App'
                     : 'Generate My Plan'
-                  : 'Next'}
+                  : 'Continue'}
               </Text>
-              {currentStep === 7 && generateWorkoutPreference !== 'no' ? (
-                <Sparkles size={19} color={colors.textInverse} style={{ marginLeft: 8 }} />
-              ) : (
-                <ArrowRight size={20} color={colors.textInverse} style={{ marginLeft: 8 }} />
-              )}
             </TouchableOpacity>
           </View>
         )}
@@ -1221,73 +1243,54 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ route, navig
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#0A0A0A',
   },
   keyboardView: {
     flex: 1,
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  navBar: {
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.background,
+    justifyContent: 'flex-start',
+    marginBottom: 8,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
+    width: 44,
+    height: 44,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+    marginLeft: -4,
   },
-  progressTrackContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginHorizontal: 16,
+  progressTrack: {
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 1.5,
+    overflow: 'hidden',
+    width: '100%',
   },
-  progressBarSegment: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  progressBarSegmentActive: {
-    backgroundColor: '#FFD600',
-  },
-  stepBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  stepBadgeText: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#E5E5E5',
-    letterSpacing: 0.5,
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#007AFF',
+    borderRadius: 1.5,
   },
   scrollContainer: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: spacing.xxl,
+    paddingBottom: 32,
   },
   centerScrollContent: {
     justifyContent: 'center',
-    paddingVertical: spacing.xl,
+    paddingVertical: 32,
   },
   stepAnimatedWrapper: {
     flex: 1,
@@ -1295,13 +1298,13 @@ const styles = StyleSheet.create({
   stepContainer: {
     flex: 1,
   },
-  headerBlock: {
+  centeredTitleGroup: {
     alignItems: 'center',
     marginTop: 16,
-    marginBottom: 32,
+    marginBottom: 28,
   },
-  title: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+  centeredStepTitle: {
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 30,
     fontWeight: '700',
     color: '#FFFFFF',
@@ -1309,244 +1312,52 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
     lineHeight: 38,
   },
+  stepSubtitleText: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+    paddingHorizontal: 16,
+  },
   fieldsContainer: {
-    gap: spacing.lg,
+    gap: 16,
+    marginTop: 8,
   },
   optionsStack: {
-    gap: spacing.md,
+    gap: 12,
   },
-  selectableCard: {
+  optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-  },
-  selectableCardActive: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  selectableCardError: {
-    borderColor: colors.error,
-  },
-  optionTitleText: {
-    fontSize: typography.sizes.base,
-    fontFamily: typography.fonts.headingBold,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  optionTitleTextActive: {
-    color: colors.primary,
-  },
-  optionSubtitleText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.headingMedium,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  optionDescText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.body,
-    color: colors.textMuted,
-    lineHeight: 16,
-  },
-  radioCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: borderRadius.full,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioCircleActive: {
-    borderColor: colors.primary,
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
-  },
-  bottomBar: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  globalErrorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 59, 48, 0.12)',
+    backgroundColor: 'rgba(28, 28, 30, 0.8)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.35)',
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    padding: 16,
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+        } as any)
+      : {}),
   },
-  globalErrorText: {
-    color: colors.error,
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.headingMedium,
-    fontWeight: '600',
-    flex: 1,
+  optionCardSelected: {
+    borderColor: '#007AFF',
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
   },
-  continueBtn: {
-    flexDirection: 'row',
+  optionCardError: {
+    borderColor: '#FF3B30',
+  },
+  optionIconBox: {
+    width: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFD600',
-    height: 54,
-    borderRadius: borderRadius.full,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  continueBtnText: {
-    fontSize: typography.sizes.base,
-    fontFamily: typography.fonts.headingBold,
-    fontWeight: '700',
-    color: colors.textInverse,
-    letterSpacing: 0.2,
-  },
-  // =====================================================
-  // AGENTIC LOADING STYLES
-  // =====================================================
-  agenticContainer: {
-    flex: 1,
-    paddingTop: 50,
-    paddingBottom: 40,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  agenticHeaderBlock: {
-    alignItems: 'center',
-    marginBottom: 38,
-  },
-  agenticTitle: {
-    fontSize: 25,
-    fontFamily: typography.fonts.headingBold,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  agenticSubtitle: {
-    fontSize: 14,
-    fontFamily: typography.fonts.body,
-    color: '#8E8E93',
-    textAlign: 'center',
-    maxWidth: 290,
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  agenticDotsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
-  agenticDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#FFFFFF',
-  },
-  agenticTimelineContainer: {
-    width: '100%',
-    maxWidth: 340,
-  },
-  timelineItemRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    minHeight: 62,
-  },
-  timelineNodeCol: {
-    width: 22,
-    alignItems: 'center',
     marginRight: 14,
   },
-  timelineCircleWrapper: {
-    width: 22,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timelineDoneCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#00C853',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timelineSpinnerCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    borderTopColor: '#FFFFFF',
-    borderRightColor: '#FFFFFF',
-    backgroundColor: 'transparent',
-  },
-  timelinePendingDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#38383A',
-  },
-  timelineConnectorLine: {
-    width: 2,
+  optionContent: {
     flex: 1,
-    marginVertical: 4,
-    borderRadius: 1,
-  },
-  timelineConnectorLineDone: {
-    backgroundColor: '#00C853',
-  },
-  timelineConnectorLinePending: {
-    backgroundColor: '#27272A',
-  },
-  timelineTextContent: {
-    flex: 1,
-    paddingTop: 1,
-    paddingBottom: 20,
-  },
-  timelineStepTitle: {
-    fontSize: 14.5,
-    fontFamily: typography.fonts.headingBold,
-    letterSpacing: -0.2,
-  },
-  timelineStepTitleActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  timelineStepTitlePending: {
-    color: '#52525B',
-    fontWeight: '600',
-  },
-  timelineStepSubtitle: {
-    fontSize: 12,
-    fontFamily: typography.fonts.body,
-    marginTop: 3,
-    lineHeight: 16,
-  },
-  timelineStepSubtitleActive: {
-    color: '#8E8E93',
-  },
-  timelineStepSubtitlePending: {
-    color: '#38383A',
   },
   optionHeaderRow: {
     flexDirection: 'row',
@@ -1554,42 +1365,117 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  optionBadgePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginLeft: 6,
+  optionTitle: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
   },
-  optionBadgePillYes: {
-    backgroundColor: 'rgba(255, 214, 0, 0.12)',
-    borderColor: '#FFD600',
+  optionTitleSelected: {
+    color: '#FFFFFF',
   },
-  optionBadgePillNo: {
+  optionSubtitle: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.6)',
+    lineHeight: 18,
+  },
+  optionDesc: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.55)',
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  tagBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  tagBadgeSelected: {
+    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+  },
+  tagBadgeText: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.6)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  tagBadgeTextSelected: {
+    color: '#007AFF',
+  },
+  checkCircleWrapper: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  unselectedRing: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.15)',
   },
-  optionBadgePillText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#0A0A0A',
   },
-  optionBadgePillTextYes: {
-    color: '#FFD600',
+  primaryButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 14,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  optionBadgePillTextNo: {
-    color: '#A0A0A0',
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
-  generationOptionCard: {
-    paddingVertical: 16,
+  primaryButtonText: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
   },
-  subtitle: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 14,
-    color: '#9E9E9E',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-    paddingHorizontal: 8,
+  globalErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 59, 48, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.35)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  globalErrorText: {
+    color: '#FF3B30',
+    fontSize: 13,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '500',
+    flex: 1,
+  },
+  agenticContainer: {
+    flex: 1,
+    paddingTop: 50,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

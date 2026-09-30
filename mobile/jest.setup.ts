@@ -190,18 +190,10 @@ jest.mock('react-native-svg', () => {
   };
 });
 
-// Lucide React Native icon mock
-jest.mock('lucide-react-native', () => {
-  const React = require('react');
-  return new Proxy(
-    {},
-    {
-      get: (_target, prop) => {
-        return (props: any) => React.createElement('Icon', { ...props, name: String(prop) });
-      },
-    },
-  );
-});
+// SF Symbols icon mock
+jest.mock('expo-symbols', () => ({
+  SymbolView: (props: any) => require('react').createElement('SymbolView', props),
+}));
 
 // Expo Constants mock
 jest.mock('expo-constants', () => ({

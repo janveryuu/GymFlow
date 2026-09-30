@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Ai\ChatController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Member\AttendanceController;
 use App\Http\Controllers\Member\PreferencesController;
@@ -17,10 +18,14 @@ use Illuminate\Support\Facades\Route;
 | /api/v1/admin/*   — Admin role only (stub — routing boundary exists)
 | /api/v1/staff/*   — Staff role only (stub — routing boundary exists)
 | /api/v1/member/*  — Member role only
+| /api/v1/chat      — AI Coach Chat (Groq powered)
 |--------------------------------------------------------------------------
 */
 
 Route::prefix('v1')->group(function () {
+
+    // ── AI Coach Chatbot ──────────────────────────────────────────────────
+    Route::post('/chat', [ChatController::class, 'chat']);
 
     // ── Auth endpoints ───────────────────────────────────────────────────
     Route::prefix('auth')->group(function () {

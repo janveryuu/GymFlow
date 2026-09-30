@@ -11,8 +11,8 @@ import {
   Easing,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Zap } from 'lucide-react-native';
+import { DarkVeil } from '../../components/DarkVeil';
+import { Zap } from '../../components/icons';
 import * as Haptics from 'expo-haptics';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { GlassmorphismSlider } from '../../components/GlassmorphismSlider';
@@ -127,61 +127,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
-      {/* Deep Obsidian Black Base */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000000' }]} />
-
-      {/* Atmospheric Diagonal Light Beam: Layer 1 - Broad Ambient Warm Wash */}
-      <LinearGradient
-        colors={[
-          'rgba(255, 214, 0, 0.42)',
-          'rgba(255, 180, 0, 0.22)',
-          'rgba(217, 119, 6, 0.08)',
-          'rgba(0, 0, 0, 0)',
-        ]}
-        locations={[0.0, 0.25, 0.48, 0.75]}
-        start={{ x: 1.0, y: 0.0 }}
-        end={{ x: 0.0, y: 0.8 }}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Atmospheric Diagonal Light Beam: Layer 2 - High-Intensity Luminous Core Beam */}
-      <LinearGradient
-        colors={[
-          'rgba(255, 245, 120, 0.72)',
-          'rgba(255, 214, 0, 0.50)',
-          'rgba(245, 158, 11, 0.18)',
-          'rgba(0, 0, 0, 0)',
-        ]}
-        locations={[0.0, 0.20, 0.45, 0.70]}
-        start={{ x: 1.0, y: 0.05 }}
-        end={{ x: 0.15, y: 0.55 }}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Atmospheric Diagonal Light Beam: Layer 3 - Top-Right Radiant Bloom */}
-      <LinearGradient
-        colors={[
-          'rgba(255, 235, 59, 0.60)',
-          'rgba(255, 193, 7, 0.30)',
-          'rgba(0, 0, 0, 0)',
-        ]}
-        locations={[0.0, 0.35, 0.75]}
-        start={{ x: 0.95, y: -0.1 }}
-        end={{ x: 0.4, y: 0.45 }}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Grounding bottom black fade: guarantees lower half is pure velvety pitch black */}
-      <LinearGradient
-        colors={[
-          'rgba(0, 0, 0, 0)',
-          'rgba(0, 0, 0, 0.65)',
-          '#000000',
-        ]}
-        locations={[0.35, 0.65, 0.88]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
+      {/* Luminous Animated Dark Veil Background (Silk Folds in Pure White - Matching Homescreen) */}
+      <DarkVeil
+        speed={0.35}
+        warpAmount={0.25}
+        noiseIntensity={0.01}
+        whiteMode={true}
       />
 
       <SafeAreaView style={styles.safeArea}>
@@ -282,6 +233,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+    overflow: 'hidden',
   },
   safeArea: {
     flex: 1,

@@ -8,6 +8,8 @@ import {
   TextInput,
   RefreshControl,
   Modal,
+  ScrollView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -18,17 +20,24 @@ import {
   X,
   Check,
   Dumbbell,
-  Clock,
   Plus,
-} from 'lucide-react-native';
-import { colors, typography, borderRadius, spacing } from '../theme';
+  Flame,
+} from '../components/icons';
 import { WorkoutIllustration } from '../components/WorkoutIllustration';
+import { hasLocalWorkoutAsset } from '../assets/workoutAssetMap';
 import { WorkoutCardSkeleton } from '../components/SkeletonLoader';
 import { EmptyState } from '../components/EmptyState';
+import { JellyRadio } from '../components/JellyRadio';
 import { getSyncRepository } from '../sync/SyncRepository';
 import { mergeWorkouts, filterMergedCatalog } from '../sync/workoutMerge';
 import { useCustomWorkoutsStore, CustomExerciseItem, CustomRoutineWorkout } from '../store/customWorkoutsStore';
 import type { MergedWorkout } from '../types';
+
+const APPLE_FONT_FAMILY = Platform.OS === 'web'
+  ? '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif'
+  : Platform.OS === 'ios'
+  ? 'System'
+  : 'Roboto';
 
 const CATEGORIES = [
   { id: 'all', label: 'All' },
@@ -39,9 +48,26 @@ const CATEGORIES = [
   { id: 'full-body', label: 'Full-Body' },
 ];
 
+function formatTitleCase(str?: string): string {
+  if (!str) return '';
+  return str
+    .split(/([ -])/)
+    .map((word) =>
+      word.length > 0 && word !== ' ' && word !== '-'
+        ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        : word
+    )
+    .join('');
+}
+
 export const WorkoutSelectScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const { addCustomWorkout } = useCustomWorkoutsStore();
+  const {
+    addCustomWorkout,
+    selectedRoutineExerciseIds,
+    toggleRoutineExerciseId,
+    clearSelectedRoutineExerciseIds,
+  } = useCustomWorkoutsStore();
   const repo = getSyncRepository();
 
   const [workouts, setWorkouts] = useState<MergedWorkout[]>([]);
@@ -50,8 +76,8 @@ export const WorkoutSelectScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  // Selected workout IDs
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Selected workout IDs synced with store
+  const selectedIds = selectedRoutineExerciseIds;
 
   // Routine Name Confirmation Modal
   const [isNameModalVisible, setIsNameModalVisible] = useState(false);
@@ -83,27 +109,51 @@ export const WorkoutSelectScreen: React.FC = () => {
   const handleToggleSelect = (workoutId: string) => {
     try {
       Haptics.selectionAsync();
-    } catch {
-      // Haptics optional
-    }
-    setSelectedIds((prev) =>
-      prev.includes(workoutId)
-        ? prev.filter((id) => id !== workoutId)
-        : [...prev, workoutId]
-    );
+    } catch {}
+    toggleRoutineExerciseId(workoutId);
   };
 
-  // Filtered workouts
+  const handleOpenWorkoutDetail = (workout: MergedWorkout) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    navigation.navigate('ExerciseDetailScreen', { workout });
+  };
+
+  // Filtered workouts - only keep exercises that have an animated illustration (GIF) and exclude cardio/bodyweight
   const filteredWorkouts = useMemo(() => {
-    return filterMergedCatalog(workouts, {
+    const catalog = filterMergedCatalog(workouts, {
       category: selectedCategory === 'all' ? undefined : selectedCategory,
       query: searchQuery,
     });
+    return catalog.filter(
+      (w) =>
+        Boolean(w.slug && hasLocalWorkoutAsset(w.slug)) &&
+        w.category?.toLowerCase() !== 'cardio' &&
+        w.category?.toLowerCase() !== 'bodyweight'
+    );
   }, [workouts, selectedCategory, searchQuery]);
+
+  // Selected statistics (focusing on sets and exercises, avoiding arbitrary rest time)
+  const selectedStats = useMemo(() => {
+    const selectedList = workouts.filter((w) => selectedIds.includes(w.id));
+    const totalSets = selectedList.reduce(
+      (sum, w) => sum + (w.sets || 4),
+      0
+    );
+    const totalCalories = selectedList.reduce(
+      (sum, w) => sum + (w.calories || 110),
+      0
+    );
+    return { count: selectedList.length, totalSets, totalCalories, selectedList };
+  }, [workouts, selectedIds]);
 
   const handleOpenNamePrompt = () => {
     if (selectedIds.length === 0) return;
-    const selectedList = workouts.filter((w) => selectedIds.includes(w.id));
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    const { selectedList } = selectedStats;
     const defaultName = selectedList.length === 1 && selectedList[0]?.title
       ? `${selectedList[0].title} Routine`
       : `Custom ${selectedCategory !== 'all' ? selectedCategory.toUpperCase() : 'Strength'} Circuit`;
@@ -112,21 +162,15 @@ export const WorkoutSelectScreen: React.FC = () => {
   };
 
   const handleConfirmCreateRoutine = () => {
-    const selectedList = workouts.filter((w) => selectedIds.includes(w.id));
+    const { selectedList, totalCalories } = selectedStats;
     if (selectedList.length === 0) return;
 
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      // Haptics optional
-    }
+    } catch {}
 
     const totalDuration = selectedList.reduce(
       (sum, w) => sum + (w.duration_minutes || 15),
-      0
-    );
-    const totalCalories = selectedList.reduce(
-      (sum, w) => sum + (w.calories || 110),
       0
     );
 
@@ -181,7 +225,7 @@ export const WorkoutSelectScreen: React.FC = () => {
 
     addCustomWorkout(newRoutine);
     setIsNameModalVisible(false);
-    setSelectedIds([]);
+    clearSelectedRoutineExerciseIds();
     navigation.goBack();
   };
 
@@ -195,79 +239,78 @@ export const WorkoutSelectScreen: React.FC = () => {
           isSelected && styles.workoutCardSelected,
         ]}
         onPress={() => handleToggleSelect(item.id)}
-        activeOpacity={0.88}
+        activeOpacity={0.75}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isSelected }}
         accessibilityLabel={`${item.title}, ${isSelected ? 'selected' : 'not selected'}`}
       >
-        {/* Checkbox */}
-        <View
-          style={[
-            styles.checkbox,
-            isSelected && styles.checkboxChecked,
-          ]}
-        >
-          {isSelected && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
-        </View>
+        {/* Apple HIG Checklist Circle - ONLY displayed when selected */}
+        {isSelected && (
+          <View style={styles.checkboxChecked}>
+            <Check size={12} color="#FFFFFF" strokeWidth={3} />
+          </View>
+        )}
 
         {/* Thumbnail / Squircle */}
         <View style={styles.thumbnailSquircle}>
-          {item.slug ? (
+          {item.slug && hasLocalWorkoutAsset(item.slug) ? (
             <WorkoutIllustration
               slug={item.slug}
-              size={56}
+              size={50}
+              autoPlay={true}
               backgroundColor="#FFFFFF"
               containerStyle={styles.illustrationWrap}
             />
           ) : (
-            <Dumbbell size={22} color="#0A0A0A" />
+            <Dumbbell size={20} color="#007AFF" />
           )}
         </View>
 
-        {/* Details Column */}
+        {/* Details Column: Title on top, Category below in gray */}
         <View style={styles.workoutInfo}>
-          <View style={styles.badgeRow}>
-            <Text style={styles.categoryBadge}>
-              {item.category?.toUpperCase() || 'GENERAL'}
-            </Text>
-            {item.equipment ? (
-              <Text style={styles.equipmentText} numberOfLines={1}>
-                • {item.equipment}
-              </Text>
-            ) : null}
-          </View>
-
           <Text style={styles.workoutTitle} numberOfLines={1}>
             {item.title}
           </Text>
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Clock size={12} color="#8E8E8E" />
-              <Text style={styles.metaText}>{item.duration_minutes || 15}m</Text>
-            </View>
-            <Text style={styles.metaDot}>•</Text>
-            <Text style={styles.metaText}>
-              {item.difficulty ? item.difficulty.toUpperCase() : 'INTERMEDIATE'}
-            </Text>
-          </View>
+          <Text style={styles.categorySubtext}>
+            {formatTitleCase(item.category || 'General')}
+          </Text>
         </View>
+
+        {/* View Details Button */}
+        <TouchableOpacity
+          style={styles.viewButton}
+          onPress={(e) => {
+            e.stopPropagation?.();
+            handleOpenWorkoutDetail(item);
+          }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`View info for ${item.title}`}
+        >
+          <Text style={styles.viewButtonText}>View</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* 1. TOP HEADER */}
+      {/* 1. iOS Top Navigation Bar */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            } catch {}
+            navigation.goBack();
+          }}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <ChevronLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
+          <ChevronLeft size={22} color="#007AFF" strokeWidth={2.4} />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>Select Workouts</Text>
@@ -279,7 +322,10 @@ export const WorkoutSelectScreen: React.FC = () => {
           ]}
           onPress={handleOpenNamePrompt}
           disabled={selectedIds.length === 0}
-          activeOpacity={0.8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={selectedIds.length > 0 ? `Add ${selectedIds.length} exercises` : 'Done'}
         >
           <Text
             style={[
@@ -292,13 +338,13 @@ export const WorkoutSelectScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* 2. SEARCH BAR */}
+      {/* 2. Apple Native Search Bar */}
       <View style={styles.searchContainer}>
-        <Search size={18} color="#8E8E8E" style={styles.searchIcon} />
+        <Search size={16} color="rgba(235, 235, 245, 0.55)" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search exercises, muscles, equipment..."
-          placeholderTextColor="#8E8E8E"
+          placeholderTextColor="rgba(235, 235, 245, 0.4)"
           value={searchQuery}
           onChangeText={setSearchQuery}
           autoCapitalize="none"
@@ -307,42 +353,51 @@ export const WorkoutSelectScreen: React.FC = () => {
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity
-            onPress={() => setSearchQuery('')}
+            onPress={() => {
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              } catch {}
+              setSearchQuery('');
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={styles.clearButton}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
           >
-            <X size={16} color="#6B6B6B" />
+            <View style={styles.clearCircle}>
+              <X size={12} color="rgba(0, 0, 0, 0.7)" strokeWidth={2.5} />
+            </View>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* 3. CATEGORY PILLS */}
+      {/* 3. Apple Frosted Category Pills with Jelly Spring Physics */}
       <View style={styles.pillsContainer}>
-        <FlatList
-          data={CATEGORIES}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(cat) => cat.id}
-          contentContainerStyle={styles.pillsContent}
-          renderItem={({ item }) => {
-            const isActive = selectedCategory === item.id;
-            return (
-              <TouchableOpacity
-                style={[styles.pill, isActive && styles.pillActive]}
-                onPress={() => setSelectedCategory(item.id)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[styles.pillText, isActive && styles.pillTextActive]}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
+        <JellyRadio
+          items={CATEGORIES}
+          value={selectedCategory}
+          onChange={(newCategory) => {
+            setSelectedCategory(newCategory);
           }}
+          size="md"
+          gap={8}
+          radius={18}
+          swell={0.2}
+          barge={6}
+          shrink={0.05}
+          jelly={1}
+          bounce={0.25}
+          stagger={22}
+          stiffness={580}
+          activeColor="#007AFF"
+          activeTextColor="#FFFFFF"
+          chipColor="rgba(255, 255, 255, 0.08)"
+          textColor="rgba(255, 255, 255, 0.65)"
+          contentContainerStyle={styles.pillsContent}
         />
       </View>
 
-      {/* 4. WORKOUT LIST */}
+      {/* 4. Workout List */}
       {isLoading ? (
         <View style={styles.listPadding}>
           <WorkoutCardSkeleton />
@@ -360,7 +415,8 @@ export const WorkoutSelectScreen: React.FC = () => {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
-              tintColor="#0A0A0A"
+              tintColor="#007AFF"
+              colors={['#007AFF']}
             />
           }
           ListEmptyComponent={
@@ -369,6 +425,8 @@ export const WorkoutSelectScreen: React.FC = () => {
               title="No Workouts Found"
               description="Try another search term or select a different muscle group."
               actionLabel="Clear Filter"
+              actionBackgroundColor="#007AFF"
+              actionTextColor="#FFFFFF"
               onAction={() => {
                 setSearchQuery('');
                 setSelectedCategory('all');
@@ -378,27 +436,37 @@ export const WorkoutSelectScreen: React.FC = () => {
         />
       )}
 
-      {/* 5. FLOATING BOTTOM BAR (When >= 1 selected) */}
+      {/* 5. Floating Glass Bottom Bar (When >= 1 selected - without arbitrary rest time) */}
       {selectedIds.length > 0 && (
         <View style={styles.floatingBottomBar}>
           <View style={styles.floatingInfo}>
             <Text style={styles.floatingCount}>
-              {selectedIds.length} {selectedIds.length === 1 ? 'exercise' : 'exercises'} selected
+              {selectedStats.count} {selectedStats.count === 1 ? 'exercise' : 'exercises'} selected
             </Text>
-            <Text style={styles.floatingSubtext}>Ready to add to custom routine</Text>
+            <View style={styles.floatingMetaRow}>
+              <Text style={styles.floatingSubtext}>{selectedStats.totalSets} total sets</Text>
+              <Text style={styles.floatingDot}>•</Text>
+              <View style={styles.floatingMetaItem}>
+                <Flame size={11} color="#FF9F0A" />
+                <Text style={styles.floatingSubtext}>~{selectedStats.totalCalories} kcal</Text>
+              </View>
+            </View>
           </View>
           <TouchableOpacity
             style={styles.floatingActionBtn}
             onPress={handleOpenNamePrompt}
-            activeOpacity={0.85}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Create Routine"
           >
-            <Plus size={16} color="#FFFFFF" strokeWidth={3} />
+            <Plus size={15} color="#FFFFFF" strokeWidth={2.6} />
             <Text style={styles.floatingActionBtnText}>Create Routine</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* 6. ROUTINE NAME CONFIRMATION MODAL */}
+      {/* 6. Apple HIG Routine Name Confirmation Modal */}
       <Modal
         visible={isNameModalVisible}
         transparent
@@ -407,19 +475,26 @@ export const WorkoutSelectScreen: React.FC = () => {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
+            {/* Apple Sheet Drag Handle */}
+            <View style={styles.modalDragHandle} />
+
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Name Your Routine</Text>
+              <View style={styles.modalHeaderTitleWrap}>
+                <Text style={styles.modalTitle}>Name Your Routine</Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedStats.count} {selectedStats.count === 1 ? 'exercise' : 'exercises'} • {selectedStats.totalSets} total sets
+                </Text>
+              </View>
               <TouchableOpacity
+                style={styles.modalCloseBtn}
                 onPress={() => setIsNameModalVisible(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
               >
-                <X size={20} color="#8E8E8E" />
+                <X size={16} color="rgba(255, 255, 255, 0.6)" strokeWidth={2.4} />
               </TouchableOpacity>
             </View>
-
-            <Text style={styles.modalSubtitle}>
-              You selected {selectedIds.length} {selectedIds.length === 1 ? 'exercise' : 'exercises'} to include in this custom workout.
-            </Text>
 
             <View style={styles.modalInputGroup}>
               <Text style={styles.modalInputLabel}>Routine Title</Text>
@@ -428,8 +503,9 @@ export const WorkoutSelectScreen: React.FC = () => {
                 value={routineName}
                 onChangeText={setRoutineName}
                 placeholder="e.g. Chest & Shoulder Power"
-                placeholderTextColor="#8E8E8E"
+                placeholderTextColor="rgba(255, 255, 255, 0.4)"
                 autoFocus
+                selectionColor="#007AFF"
               />
             </View>
 
@@ -437,6 +513,8 @@ export const WorkoutSelectScreen: React.FC = () => {
               style={styles.modalSaveButton}
               onPress={handleConfirmCreateRoutine}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Save Custom Workout"
             >
               <Text style={styles.modalSaveButtonText}>Save Custom Workout</Text>
             </TouchableOpacity>
@@ -450,81 +528,91 @@ export const WorkoutSelectScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#000000',
   },
+
+  /* 1. iOS Top Navigation Bar */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: 12,
+    backgroundColor: '#000000',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.12)',
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerTitle: {
-    fontSize: 18,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '700',
+    fontSize: 17,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   doneButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
   },
-  doneButtonActive: {
-    backgroundColor: colors.primary,
-  },
+  doneButtonActive: {},
   doneButtonText: {
-    fontSize: 13,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textMuted,
-    fontWeight: '700',
+    fontSize: 16,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.3)',
+    fontWeight: '600',
   },
   doneButtonTextActive: {
-    color: colors.textInverse,
+    color: '#007AFF',
+    fontWeight: '600',
   },
 
+  /* 2. Apple Native Search Bar */
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: 'rgba(142, 142, 147, 0.18)',
     marginHorizontal: 16,
-    marginTop: 12,
+    marginTop: 10,
     marginBottom: 8,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 42,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 38,
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    fontFamily: typography.fonts.body,
-    color: colors.text,
+    fontSize: 15,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
     height: '100%',
+    paddingVertical: 0,
   },
   clearButton: {
-    padding: 4,
+    padding: 2,
+  },
+  clearCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(235, 235, 245, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
+  /* 3. Apple Frosted Category Pills */
   pillsContainer: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   pillsContent: {
     paddingHorizontal: 16,
@@ -532,40 +620,46 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   pill: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
   },
   pillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 2,
   },
   pillText: {
     fontSize: 13,
-    fontFamily: typography.fonts.headingMedium,
-    color: colors.textSecondary,
-    fontWeight: '600',
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontWeight: '500',
   },
   pillTextActive: {
-    color: colors.textInverse,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 
+  /* 4. Workout List */
   listPadding: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 100, // room for floating bottom bar
+    paddingTop: 6,
+    paddingBottom: 110, // room for floating bottom bar
   },
   workoutCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(28, 28, 30, 0.75)',
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     padding: 12,
     marginBottom: 10,
     shadowColor: '#000000',
@@ -575,28 +669,22 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   workoutCardSelected: {
-    borderColor: colors.primary,
+    borderColor: '#007AFF',
     borderWidth: 1.5,
-    backgroundColor: colors.surfaceElevated,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
   },
   checkboxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   thumbnailSquircle: {
-    width: 52,
-    height: 52,
+    width: 50,
+    height: 50,
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
@@ -613,71 +701,66 @@ const styles = StyleSheet.create({
   },
   workoutInfo: {
     flex: 1,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  categoryBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    letterSpacing: 0.4,
-  },
-  equipmentText: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginLeft: 4,
-    flex: 1,
+    justifyContent: 'center',
   },
   workoutTitle: {
     fontSize: 15,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '700',
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    letterSpacing: -0.2,
     marginBottom: 4,
   },
-  metaRow: {
-    flexDirection: 'row',
+  categorySubtext: {
+    fontSize: 13,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontWeight: '500',
+  },
+  viewButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    fontSize: 11,
-    fontFamily: typography.fonts.body,
-    color: colors.textMuted,
-  },
-  metaDot: {
-    marginHorizontal: 6,
-    color: colors.border,
-    fontSize: 11,
+  viewButtonText: {
+    fontSize: 13,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#007AFF',
+    fontWeight: '600',
   },
 
-  /* Floating Bottom Bar */
+  /* 5. Floating Glass Bottom Bar */
   floatingBottomBar: {
     position: 'absolute',
     bottom: 24,
     left: 16,
     right: 16,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(28, 28, 30, 0.92)',
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
     elevation: 8,
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(25px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(25px) saturate(180%)',
+        } as any)
+      : {}),
   },
   floatingInfo: {
     flex: 1,
@@ -685,103 +768,158 @@ const styles = StyleSheet.create({
   },
   floatingCount: {
     fontSize: 14,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    fontWeight: '700',
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  floatingMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  floatingMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   floatingSubtext: {
     fontSize: 11,
-    fontFamily: typography.fonts.body,
-    color: colors.textMuted,
-    marginTop: 1,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  floatingDot: {
+    marginHorizontal: 6,
+    color: 'rgba(255, 255, 255, 0.3)',
+    fontSize: 10,
   },
   floatingActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     gap: 6,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
   },
   floatingActionBtnText: {
-    fontSize: 13,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textInverse,
+    fontSize: 14,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
 
-  /* Modal */
+  /* 6. Apple HIG Routine Name Modal */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+        } as any)
+      : {}),
   },
   modalCard: {
     width: '100%',
-    maxWidth: 340,
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
+    maxWidth: 360,
+    backgroundColor: 'rgba(28, 28, 30, 0.96)',
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    padding: 22,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  modalDragHandle: {
+    width: 36,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  modalHeaderTitleWrap: {
+    flex: 1,
+    marginRight: 10,
   },
   modalTitle: {
-    fontSize: 17,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
+    fontSize: 18,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   modalSubtitle: {
     fontSize: 12,
-    fontFamily: typography.fonts.body,
-    color: colors.textSecondary,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.6)',
     lineHeight: 16,
-    marginBottom: 16,
+    marginTop: 3,
+  },
+  modalCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalInputGroup: {
     marginBottom: 16,
   },
   modalInputLabel: {
-    fontSize: 12,
-    fontFamily: typography.fonts.headingMedium,
-    color: colors.textSecondary,
+    fontSize: 11,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: 'rgba(255, 255, 255, 0.55)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 6,
+    fontWeight: '600',
   },
   modalTextInput: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: colors.text,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#FFFFFF',
     fontSize: 15,
-    fontFamily: typography.fonts.headingBold,
+    fontFamily: APPLE_FONT_FAMILY,
   },
   modalSaveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
+    backgroundColor: '#007AFF',
+    borderRadius: 14,
+    paddingVertical: 13,
     alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
   modalSaveButtonText: {
-    fontSize: 14,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textInverse,
-    fontWeight: '700',
+    fontSize: 15,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });

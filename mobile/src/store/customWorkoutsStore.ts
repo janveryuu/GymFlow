@@ -85,16 +85,27 @@ const INITIAL_CUSTOM_ROUTINES: CustomRoutineWorkout[] = [];
 
 interface CustomWorkoutsState {
   customWorkouts: CustomRoutineWorkout[];
+  archivedWorkouts: CustomRoutineWorkout[];
   pendingGeneratedWorkout: CustomRoutineWorkout | null;
+  selectedRoutineExerciseIds: string[];
   addCustomWorkout: (workout: CustomRoutineWorkout) => void;
   removeCustomWorkout: (id: string) => void;
+  archiveCustomWorkout: (id: string) => CustomRoutineWorkout | undefined;
+  unarchiveCustomWorkout: (id: string) => CustomRoutineWorkout | undefined;
+  removeArchivedWorkout: (id: string) => void;
+  restoreCustomWorkout: (workout: CustomRoutineWorkout, atIndex?: number) => void;
   getCustomWorkoutById: (id: string) => CustomRoutineWorkout | undefined;
   setPendingGeneratedWorkout: (workout: CustomRoutineWorkout | null) => void;
+  setSelectedRoutineExerciseIds: (ids: string[]) => void;
+  toggleRoutineExerciseId: (id: string) => void;
+  clearSelectedRoutineExerciseIds: () => void;
 }
 
 export const useCustomWorkoutsStore = create<CustomWorkoutsState>((set, get) => ({
   customWorkouts: INITIAL_CUSTOM_ROUTINES,
+  archivedWorkouts: [],
   pendingGeneratedWorkout: null,
+  selectedRoutineExerciseIds: [],
   addCustomWorkout: (workout) =>
     set((state) => ({
       customWorkouts: [workout, ...state.customWorkouts.filter((w) => w.id !== workout.id)],
@@ -103,9 +114,55 @@ export const useCustomWorkoutsStore = create<CustomWorkoutsState>((set, get) => 
     set((state) => ({
       customWorkouts: state.customWorkouts.filter((w) => w.id !== id),
     })),
+  archiveCustomWorkout: (id) => {
+    const item = get().customWorkouts.find((w) => w.id === id);
+    if (!item) return undefined;
+    set((state) => ({
+      customWorkouts: state.customWorkouts.filter((w) => w.id !== id),
+      archivedWorkouts: [item, ...state.archivedWorkouts.filter((w) => w.id !== id)],
+    }));
+    return item;
+  },
+  unarchiveCustomWorkout: (id) => {
+    const item = get().archivedWorkouts.find((w) => w.id === id);
+    if (!item) return undefined;
+    set((state) => ({
+      archivedWorkouts: state.archivedWorkouts.filter((w) => w.id !== id),
+      customWorkouts: [item, ...state.customWorkouts.filter((w) => w.id !== id)],
+    }));
+    return item;
+  },
+  removeArchivedWorkout: (id) =>
+    set((state) => ({
+      archivedWorkouts: state.archivedWorkouts.filter((w) => w.id !== id),
+    })),
+  restoreCustomWorkout: (workout, atIndex) =>
+    set((state) => {
+      const remaining = state.customWorkouts.filter((w) => w.id !== workout.id);
+      if (atIndex !== undefined && atIndex >= 0 && atIndex <= remaining.length) {
+        const next = [...remaining];
+        next.splice(atIndex, 0, workout);
+        return {
+          customWorkouts: next,
+          archivedWorkouts: state.archivedWorkouts.filter((w) => w.id !== workout.id),
+        };
+      }
+      return {
+        customWorkouts: [workout, ...remaining],
+        archivedWorkouts: state.archivedWorkouts.filter((w) => w.id !== workout.id),
+      };
+    }),
   getCustomWorkoutById: (id: string) => {
-    return get().customWorkouts.find((w) => w.id === id);
+    return get().customWorkouts.find((w) => w.id === id) || get().archivedWorkouts.find((w) => w.id === id);
   },
   setPendingGeneratedWorkout: (workout) => set({ pendingGeneratedWorkout: workout }),
+  setSelectedRoutineExerciseIds: (ids) => set({ selectedRoutineExerciseIds: ids }),
+  toggleRoutineExerciseId: (id) =>
+    set((state) => ({
+      selectedRoutineExerciseIds: state.selectedRoutineExerciseIds.includes(id)
+        ? state.selectedRoutineExerciseIds.filter((item) => item !== id)
+        : [...state.selectedRoutineExerciseIds, id],
+    })),
+  clearSelectedRoutineExerciseIds: () => set({ selectedRoutineExerciseIds: [] }),
 }));
 

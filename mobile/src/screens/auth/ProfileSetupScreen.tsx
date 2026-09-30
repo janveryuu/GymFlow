@@ -11,24 +11,26 @@ import {
   NativeScrollEvent,
   PanResponder,
   useWindowDimensions,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import {
-  ArrowLeft,
-  Check,
+  ChevronLeft,
+  CheckCircle2,
   User,
-  ChevronRight,
   Shield,
   TrendingUp,
   TrendingDown,
   Activity,
   Flame,
   Zap,
-} from 'lucide-react-native';
+} from '../../components/icons';
 import { colors, typography, borderRadius, spacing } from '../../theme';
+import { OptionWheel } from '../../components/OptionWheel';
 import { useAuthStore } from '../../store/authStore';
 import { getSyncRepository } from '../../sync/SyncRepository';
 import { getDatabase } from '../../db/connection';
@@ -40,6 +42,12 @@ interface ProfileSetupScreenProps {
 }
 
 type GenderOption = 'male' | 'female' | 'prefer_not_to_say';
+
+const APPLE_FONT_FAMILY = Platform.OS === 'web'
+  ? '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif'
+  : Platform.OS === 'ios'
+  ? 'System'
+  : 'Roboto';
 
 const ITEM_HEIGHT = 46;
 const VISIBLE_ROWS = 5;
@@ -53,6 +61,163 @@ const MONTHS = [
 
 const MIN_YEAR = 1940;
 const MAX_YEAR = new Date().getFullYear() - 12;
+
+/**
+ * Animated Step Title Group with Native iOS Entrance Animation (+20px to 0px fade)
+ */
+interface StepTitleGroupProps {
+  title: string;
+  subtitle?: string;
+  stepKey: number;
+}
+
+const StepTitleGroup: React.FC<StepTitleGroupProps> = ({ title, subtitle, stepKey }) => {
+  const entranceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    entranceAnim.setValue(0);
+    Animated.timing(entranceAnim, {
+      toValue: 1,
+      duration: 300,
+      easing: Easing.bezier(0.32, 0.72, 0, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [stepKey]);
+
+  const translateY = entranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.centeredTitleGroup,
+        {
+          opacity: entranceAnim,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      <Text style={styles.centeredStepTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.stepSubtitleText}>{subtitle}</Text> : null}
+    </Animated.View>
+  );
+};
+
+/**
+ * Apple Inset Grouped Selection Card with:
+ * - Tap Physics: spring scale to 0.97 on press
+ * - Staggered Entrance: +20px to 0px fade with 50ms delay
+ * - iOS dark translucent background rgba(28, 28, 30, 0.8) & 16px squircle
+ * - Neutral translucent icon box background rgba(255, 255, 255, 0.08)
+ * - Right-aligned checkmark.circle.fill on selection
+ */
+interface AppleSelectionCardProps {
+  isSelected: boolean;
+  onPress: () => void;
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  title: string;
+  subtitle: string;
+  tag?: string;
+  index: number;
+  stepKey: number;
+}
+
+const AppleSelectionCard: React.FC<AppleSelectionCardProps> = ({
+  isSelected,
+  onPress,
+  icon: IconComponent,
+  title,
+  subtitle,
+  tag,
+  index,
+  stepKey,
+}) => {
+  const pressScale = useRef(new Animated.Value(1)).current;
+  const entranceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    entranceAnim.setValue(0);
+    const timer = setTimeout(() => {
+      Animated.timing(entranceAnim, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.bezier(0.32, 0.72, 0, 1),
+        useNativeDriver: true,
+      }).start();
+    }, 50 * (index + 1));
+    return () => clearTimeout(timer);
+  }, [stepKey, index]);
+
+  const handlePressIn = () => {
+    Animated.spring(pressScale, {
+      toValue: 0.97,
+      friction: 8,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressScale, {
+      toValue: 1,
+      friction: 8,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const translateY = entranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+
+  return (
+    <Animated.View
+      style={{
+        opacity: entranceAnim,
+        transform: [{ translateY }, { scale: pressScale }],
+      }}
+    >
+      <TouchableOpacity
+        style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.9}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+      >
+        <View style={styles.optionIconBox}>
+          <IconComponent size={22} color="rgba(255, 255, 255, 0.6)" strokeWidth={2} />
+        </View>
+        <View style={styles.optionContent}>
+          <View style={styles.optionHeaderRow}>
+            <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
+              {title}
+            </Text>
+            {tag ? (
+              <View style={[styles.tagBadge, isSelected && styles.tagBadgeSelected]}>
+                <Text style={[styles.tagBadgeText, isSelected && styles.tagBadgeTextSelected]}>
+                  {tag}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.optionSubtitle}>{subtitle}</Text>
+        </View>
+        <View style={styles.checkCircleWrapper}>
+          {isSelected ? (
+            <CheckCircle2 size={22} color="#007AFF" />
+          ) : (
+            <View style={styles.unselectedRing} />
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
 export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigation, route }) => {
   const { user, updateUser } = useAuthStore();
@@ -70,6 +235,53 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
 
   // Total steps: Maintain skips Step 6 (5 steps), while Bulk & Cut include Step 6 (6 steps)
   const totalSteps = goal === 'maintain' ? 5 : 6;
+
+  // Continuous slim progress bar animation (ease-in-out curve)
+  const progressAnim = useRef(new Animated.Value(1 / totalSteps)).current;
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: currentStep / totalSteps,
+      duration: 320,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [currentStep, totalSteps]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
+  // Screen push transition: 300ms cubic-bezier(0.32, 0.72, 0, 1)
+  const IOS_PUSH_EASING = useMemo(() => Easing.bezier(0.32, 0.72, 0, 1), []);
+  const stepSlideAnim = useRef(new Animated.Value(0)).current;
+  const stepOpacityAnim = useRef(new Animated.Value(1)).current;
+  const prevStepRef = useRef(currentStep);
+
+  useEffect(() => {
+    if (prevStepRef.current === currentStep) return;
+    const direction = currentStep > prevStepRef.current ? 1 : -1;
+    prevStepRef.current = currentStep;
+
+    stepSlideAnim.setValue(direction * 40);
+    stepOpacityAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(stepSlideAnim, {
+        toValue: 0,
+        duration: 300,
+        easing: IOS_PUSH_EASING,
+        useNativeDriver: true,
+      }),
+      Animated.timing(stepOpacityAnim, {
+        toValue: 1,
+        duration: 260,
+        easing: IOS_PUSH_EASING,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [currentStep, IOS_PUSH_EASING]);
 
   // Step 1: Gender
   const [gender, setGender] = useState<GenderOption>('male');
@@ -100,157 +312,23 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
   // Step 3: Weight
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
   const [weightKg, setWeightKg] = useState<number>(70);
-  const [dialWeight, setDialWeight] = useState<number>(70);
-  const dialWeightRef = useRef<number>(70);
-  dialWeightRef.current = dialWeight;
-  const weightUnitRef = useRef<'kg' | 'lbs'>('kg');
-  weightUnitRef.current = weightUnit;
-  const dragStartWeight = useRef<number>(70);
-  const lastHapticWeight = useRef<number>(70);
-
-  // Step 3 Rainbow Arch Geometry (Gentle Curve & Crisp White)
-  const { width: windowWidth } = useWindowDimensions();
-  const dialCardWidth = windowWidth;
-  const DIAL_HEIGHT = 195;
-  const DIAL_RADIUS = Math.max(330, Math.round(windowWidth * 0.95));
-  const ARC_TOP = 48;
-  const centerX = dialCardWidth / 2;
-  const centerY = ARC_TOP + DIAL_RADIUS;
-  const ANGLE_PER_UNIT = 0.024; // ~1.38 degrees per unit for gentle curve
-
-  const deltaXEdge = dialCardWidth / 2;
-  const underSqrt = Math.max(0, DIAL_RADIUS * DIAL_RADIUS - deltaXEdge * deltaXEdge);
-  const yEdge = centerY - Math.sqrt(underSqrt);
-  const rainbowArcPath = `M 0,${yEdge.toFixed(1)} A ${DIAL_RADIUS},${DIAL_RADIUS} 0 0,1 ${dialCardWidth},${yEdge.toFixed(1)}`;
-
-  const innerArcRadius = DIAL_RADIUS - 52;
-  const underSqrtInner = Math.max(0, innerArcRadius * innerArcRadius - deltaXEdge * deltaXEdge);
-  const yInnerEdge = centerY - Math.sqrt(underSqrtInner);
-  const innerRainbowPath = `M 0,${yInnerEdge.toFixed(1)} A ${innerArcRadius},${innerArcRadius} 0 0,1 ${dialCardWidth},${yInnerEdge.toFixed(1)}`;
+  const KG_ITEMS = useMemo(() => Array.from({ length: 171 }, (_, i) => 30 + i), []); // 30 to 200 kg
+  const LBS_ITEMS = useMemo(() => Array.from({ length: 385 }, (_, i) => 66 + i), []); // 66 to 450 lbs
 
   const handleToggleWeightUnit = (unit: 'kg' | 'lbs') => {
     if (unit === weightUnit) return;
     triggerHaptic();
     setWeightUnit(unit);
-    if (unit === 'lbs') {
-      const lbs = Math.round(weightKg * 2.20462);
-      setDialWeight(lbs);
-    } else {
-      setDialWeight(weightKg);
-    }
   };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 3;
-      },
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: () => {
-        dragStartWeight.current = dialWeightRef.current;
-        lastHapticWeight.current = Math.round(dialWeightRef.current);
-      },
-      onPanResponderMove: (_, gestureState) => {
-        const currentUnit = weightUnitRef.current;
-        const minVal = currentUnit === 'kg' ? 30 : 66;
-        const maxVal = currentUnit === 'kg' ? 250 : 550;
-        const delta = -gestureState.dx / 6.8;
-        const raw = dragStartWeight.current + delta;
-        const clamped = Math.max(minVal, Math.min(maxVal, raw));
-        setDialWeight(clamped);
-
-        const rounded = Math.round(clamped);
-        if (rounded !== lastHapticWeight.current) {
-          lastHapticWeight.current = rounded;
-          try {
-            Haptics.selectionAsync();
-          } catch {}
-        }
-      },
-      onPanResponderRelease: () => {
-        const currentUnit = weightUnitRef.current;
-        const rounded = Math.round(dialWeightRef.current);
-        setDialWeight(rounded);
-        if (currentUnit === 'kg') {
-          setWeightKg(rounded);
-        } else {
-          setWeightKg(Math.round(rounded / 2.20462));
-        }
-      },
-    })
-  ).current;
-
-  const { dialTicks, dialLabels } = useMemo(() => {
-    const ticks: Array<{
-      val: number;
-      x1: number;
-      y1: number;
-      x2: number;
-      y2: number;
-      stroke: string;
-      strokeWidth: number;
-    }> = [];
-
-    const labels: Array<{
-      val: number;
-      x: number;
-      y: number;
-      deg: number;
-    }> = [];
-
-    const minVal = weightUnit === 'kg' ? 30 : 66;
-    const maxVal = weightUnit === 'kg' ? 250 : 550;
-
-    const startW = Math.max(minVal, Math.floor(dialWeight - 25));
-    const endW = Math.min(maxVal, Math.ceil(dialWeight + 25));
-
-    for (let w = startW; w <= endW; w++) {
-      const angle = (w - dialWeight) * ANGLE_PER_UNIT;
-      if (Math.abs(angle) > 0.56) continue;
-
-      const isMajor = w % 10 === 0;
-      const isMedium = w % 5 === 0;
-
-      const tickLen = isMajor ? 22 : isMedium ? 15 : 9;
-      const stroke = '#FFFFFF';
-      const strokeWidth = isMajor ? 2.2 : isMedium ? 1.6 : 1.2;
-
-      const sin = Math.sin(angle);
-      const cos = Math.cos(angle);
-
-      const x1 = centerX + DIAL_RADIUS * sin;
-      const y1 = centerY - DIAL_RADIUS * cos;
-      const x2 = centerX + (DIAL_RADIUS - tickLen) * sin;
-      const y2 = centerY - (DIAL_RADIUS - tickLen) * cos;
-
-      ticks.push({
-        val: w,
-        x1,
-        y1,
-        x2,
-        y2,
-        stroke,
-        strokeWidth,
-      });
-
-      if (isMajor) {
-        const textRadius = DIAL_RADIUS - 38;
-        const xText = centerX + textRadius * sin;
-        const yText = centerY - textRadius * cos;
-        const deg = (angle * 180) / Math.PI;
-
-        labels.push({
-          val: w,
-          x: xText,
-          y: yText,
-          deg,
-        });
-      }
+  const handleWeightChange = (_index: number, val: string | number) => {
+    const num = typeof val === 'number' ? val : parseInt(String(val), 10);
+    if (weightUnit === 'kg') {
+      setWeightKg(num);
+    } else {
+      setWeightKg(Math.round(num / 2.20462));
     }
-
-    return { dialTicks: ticks, dialLabels: labels };
-  }, [dialWeight, weightUnit, centerX, centerY, DIAL_RADIUS, ANGLE_PER_UNIT]);
+  };
 
   // Step 4: Height
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
@@ -613,32 +691,28 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* Header with Back button, Step Progress Bars, and Counter */}
+      {/* Standard iOS Navigation Header & Continuous Slim Animated Progress Bar */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={handleBack}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <ArrowLeft size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        <View style={styles.progressTrackContainer}>
-          {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step) => (
-            <View
-              key={step}
-              style={[
-                styles.progressBarSegment,
-                step <= currentStep && styles.progressBarSegmentActive,
-              ]}
-            />
-          ))}
+        <View style={styles.navBar}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleBack}
+            activeOpacity={0.6}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ChevronLeft size={24} color="#007AFF" />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.stepBadge}>
-          <Text style={styles.stepBadgeText}>STEP {Math.min(currentStep, totalSteps)} OF {totalSteps}</Text>
+        <View style={styles.progressTrack}>
+          <Animated.View
+            style={[
+              styles.progressFill,
+              { width: progressWidth },
+            ]}
+          />
         </View>
       </View>
 
@@ -647,75 +721,69 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* STEP 1: GENDER */}
-        {currentStep === 1 && (
-          <View style={styles.stepSection}>
-            <View style={styles.centeredTitleGroup}>
-              <Text style={styles.centeredStepTitle}>What is your gender?</Text>
-            </View>
+        <Animated.View
+          style={[
+            styles.stepWrapper,
+            {
+              opacity: stepOpacityAnim,
+              transform: [{ translateX: stepSlideAnim }],
+            },
+          ]}
+        >
+          {/* STEP 1: GENDER */}
+          {currentStep === 1 && (
+            <View style={styles.stepSection}>
+              <StepTitleGroup
+                title="What is your gender?"
+                stepKey={currentStep}
+              />
 
-            <View style={styles.optionsList}>
-              {[
-                {
-                  id: 'male' as const,
-                  title: 'Male',
-                  subtitle: 'Calculates male basal metabolic benchmark',
-                  icon: User,
-                },
-                {
-                  id: 'female' as const,
-                  title: 'Female',
-                  subtitle: 'Calculates female basal metabolic benchmark',
-                  icon: User,
-                },
-                {
-                  id: 'prefer_not_to_say' as const,
-                  title: 'Prefer Not to Say',
-                  subtitle: 'Uses standardized athletic baseline metrics',
-                  icon: Shield,
-                },
-              ].map((opt) => {
-                const isSelected = gender === opt.id;
-                const IconComponent = opt.icon;
-                return (
-                  <TouchableOpacity
+              <View style={styles.optionsList}>
+                {[
+                  {
+                    id: 'male' as const,
+                    title: 'Male',
+                    subtitle: 'Calculates male basal metabolic benchmark',
+                    icon: User,
+                  },
+                  {
+                    id: 'female' as const,
+                    title: 'Female',
+                    subtitle: 'Calculates female basal metabolic benchmark',
+                    icon: User,
+                  },
+                  {
+                    id: 'prefer_not_to_say' as const,
+                    title: 'Prefer Not to Say',
+                    subtitle: 'Uses standardized athletic baseline metrics',
+                    icon: Shield,
+                  },
+                ].map((opt, idx) => (
+                  <AppleSelectionCard
                     key={opt.id}
-                    style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                    index={idx}
+                    stepKey={currentStep}
+                    isSelected={gender === opt.id}
+                    title={opt.title}
+                    subtitle={opt.subtitle}
+                    icon={opt.icon}
                     onPress={() => {
                       triggerHaptic();
                       setGender(opt.id);
                     }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel={opt.title}
-                  >
-                    <View style={[styles.optionIconBox, isSelected && styles.optionIconBoxSelected]}>
-                      <IconComponent size={22} color={isSelected ? '#000000' : '#FFFFFF'} />
-                    </View>
-                    <View style={styles.optionContent}>
-                      <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
-                        {opt.title}
-                      </Text>
-                      <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
-                    </View>
-                    <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
-                      {isSelected && <Check size={14} color="#000000" strokeWidth={3} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+                  />
+                ))}
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
         {/* STEP 2: BIRTHDATE - APPLE 3-COLUMN SCROLL WHEEL */}
         {currentStep === 2 && (
           <View style={styles.stepSection}>
-            <View style={styles.centeredTitleGroup}>
-              <Text style={styles.centeredStepTitle}>
-                Select your{'\n'}date of birth
-              </Text>
-            </View>
+            <StepTitleGroup
+              title={"Select your\ndate of birth"}
+              stepKey={currentStep}
+            />
 
             {/* Apple 3-Column Drum Wheel Container */}
             <View style={[styles.drumWheelContainer, { height: CONTAINER_HEIGHT }]}>
@@ -879,9 +947,10 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
         {/* STEP 3: WEIGHT */}
         {currentStep === 3 && (
           <View style={styles.stepSection}>
-            <View style={styles.centeredTitleGroup}>
-              <Text style={styles.centeredStepTitle}>What is your weight?</Text>
-            </View>
+            <StepTitleGroup
+              title="What is your weight?"
+              stepKey={currentStep}
+            />
 
             {/* Unit Toggle: kg vs lbs */}
             <View style={styles.unitToggleContainer}>
@@ -905,83 +974,24 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
               </TouchableOpacity>
             </View>
 
-            {/* Rainbow Shape Analog Weight Dial - No Background */}
-            <View style={[styles.dialCardContainer, { width: windowWidth }]} {...panResponder.panHandlers}>
-              <Svg width={dialCardWidth} height={DIAL_HEIGHT} style={StyleSheet.absoluteFill}>
-                {/* Rainbow Arch Track - White */}
-                <Path
-                  d={rainbowArcPath}
-                  fill="none"
-                  stroke="#FFFFFF"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  opacity={0.65}
-                />
-
-                {/* Inner Rainbow Guide Line - White */}
-                <Path
-                  d={innerRainbowPath}
-                  fill="none"
-                  stroke="#FFFFFF"
-                  strokeWidth={1}
-                  strokeDasharray="4,4"
-                  opacity={0.3}
-                />
-
-                {/* Tick marks radiating along the rainbow arch */}
-                {dialTicks.map((t) => (
-                  <Line
-                    key={`tick-${t.val}`}
-                    x1={t.x1}
-                    y1={t.y1}
-                    x2={t.x2}
-                    y2={t.y2}
-                    stroke={t.stroke}
-                    strokeWidth={t.strokeWidth}
-                    strokeLinecap="round"
-                  />
-                ))}
-
-                {/* Major numbers rotated along the rainbow curve */}
-                {dialLabels.map((lbl) => (
-                  <SvgText
-                    key={`lbl-${lbl.val}`}
-                    x={lbl.x}
-                    y={lbl.y}
-                    transform={`rotate(${lbl.deg.toFixed(1)}, ${lbl.x.toFixed(1)}, ${lbl.y.toFixed(1)})`}
-                    textAnchor="middle"
-                    alignmentBaseline="middle"
-                    fontSize={14}
-                    fontWeight="700"
-                    fill="#FFFFFF"
-                  >
-                    {lbl.val}
-                  </SvgText>
-                ))}
-
-                {/* Fixed center green indicator line at the crest of the rainbow arch */}
-                <Line
-                  x1={centerX}
-                  y1={ARC_TOP}
-                  x2={centerX}
-                  y2={ARC_TOP + 28}
-                  stroke="#10B981"
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                />
-
-                {/* Fixed green indicator pointer (▲) pointing up at the readout bubble */}
-                <Polygon
-                  points={`${centerX},${ARC_TOP - 9} ${centerX - 6},${ARC_TOP - 1} ${centerX + 6},${ARC_TOP - 1}`}
-                  fill="#10B981"
-                />
-              </Svg>
-
-              {/* Floating Readout Bubble at top center */}
-              <View style={styles.readoutBubble} pointerEvents="none">
-                <Text style={styles.readoutBubbleNumber}>{Math.round(dialWeight)}</Text>
-                <Text style={styles.readoutBubbleUnit}>{weightUnit}</Text>
-              </View>
+            {/* 3D Option Wheel Weight Selector */}
+            <View style={styles.optionWheelCardContainer}>
+              <OptionWheel
+                items={weightUnit === 'kg' ? KG_ITEMS : LBS_ITEMS}
+                selectedIndex={
+                  weightUnit === 'kg'
+                    ? Math.max(0, Math.min(KG_ITEMS.length - 1, weightKg - 30))
+                    : Math.max(0, Math.min(LBS_ITEMS.length - 1, Math.round(weightKg * 2.20462) - 66))
+                }
+                onChange={handleWeightChange}
+                unit={weightUnit}
+                side="center"
+                fontSize={46}
+                rowHeight={58}
+                curve={1.2}
+                tilt={7.5}
+                containerHeight={280}
+              />
             </View>
           </View>
         )}
@@ -989,9 +999,10 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
         {/* STEP 4: HEIGHT */}
         {currentStep === 4 && (
           <View style={styles.stepSection}>
-            <View style={styles.centeredTitleGroup}>
-              <Text style={styles.centeredStepTitle}>What is your height?</Text>
-            </View>
+            <StepTitleGroup
+              title="What is your height?"
+              stepKey={currentStep}
+            />
 
             {/* Unit Toggle: cm vs ft */}
             <View style={styles.unitToggleContainer}>
@@ -1076,21 +1087,21 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
                     </SvgText>
                   ))}
 
-                  {/* Horizontal Emerald Green Indicator Needle */}
+                  {/* Horizontal Indicator Needle */}
                   <Line
                     x1={RULER_BASELINE_X - 32}
                     y1={HEIGHT_CENTER_Y}
                     x2={RULER_BASELINE_X}
                     y2={HEIGHT_CENTER_Y}
-                    stroke="#10B981"
+                    stroke="#007AFF"
                     strokeWidth={2.8}
                     strokeLinecap="round"
                   />
 
-                  {/* Green Pointer Arrow (▶) pointing at the ruler tick */}
+                  {/* Pointer Arrow (▶) pointing at the ruler tick */}
                   <Polygon
                     points={`${RULER_BASELINE_X - 8},${HEIGHT_CENTER_Y - 5} ${RULER_BASELINE_X + 2},${HEIGHT_CENTER_Y} ${RULER_BASELINE_X - 8},${HEIGHT_CENTER_Y + 5}`}
-                    fill="#10B981"
+                    fill="#007AFF"
                   />
                 </Svg>
 
@@ -1113,12 +1124,11 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
         {/* STEP 5: PRIMARY FITNESS GOAL */}
         {currentStep === 5 && (
           <View style={styles.stepSection}>
-            <View style={styles.centeredTitleGroup}>
-              <Text style={styles.centeredStepTitle}>What is your primary goal?</Text>
-              <Text style={styles.stepSubtitleText}>
-                We will personalize your daily nutrition and training volume to match your physique objective.
-              </Text>
-            </View>
+            <StepTitleGroup
+              title="What is your primary goal?"
+              subtitle="We will personalize your daily nutrition and training volume to match your physique objective."
+              stepKey={currentStep}
+            />
 
             <View style={styles.optionsList}>
               {[
@@ -1143,50 +1153,29 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
                   subtitle: 'Equal caloric balance to preserve current physique & energy',
                   icon: Activity,
                 },
-              ].map((opt) => {
-                const isSelected = goal === opt.id;
-                const IconComponent = opt.icon;
-                return (
-                  <TouchableOpacity
-                    key={opt.id}
-                    style={[styles.optionCard, isSelected && styles.optionCardSelected]}
-                    onPress={() => {
-                      triggerHaptic();
-                      setGoal(opt.id);
-                      if (opt.id === 'bulk') {
-                        setCalorieAdjustment((prev) => (prev === 500 ? 500 : 300));
-                      } else if (opt.id === 'cut') {
-                        setCalorieAdjustment((prev) => (prev === -500 ? -500 : -300));
-                      } else {
-                        setCalorieAdjustment(0);
-                      }
-                    }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel={opt.title}
-                  >
-                    <View style={[styles.optionIconBox, isSelected && styles.optionIconBoxSelected]}>
-                      <IconComponent size={22} color={isSelected ? '#000000' : '#FFFFFF'} strokeWidth={2.5} />
-                    </View>
-                    <View style={styles.optionContent}>
-                      <View style={styles.optionHeaderRow}>
-                        <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
-                          {opt.title}
-                        </Text>
-                        <View style={[styles.tagBadge, isSelected && styles.tagBadgeSelected]}>
-                          <Text style={[styles.tagBadgeText, isSelected && styles.tagBadgeTextSelected]}>
-                            {opt.tag}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
-                    </View>
-                    <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
-                      {isSelected && <Check size={14} color="#000000" strokeWidth={3} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+              ].map((opt, idx) => (
+                <AppleSelectionCard
+                  key={opt.id}
+                  index={idx}
+                  stepKey={currentStep}
+                  isSelected={goal === opt.id}
+                  title={opt.title}
+                  tag={opt.tag}
+                  subtitle={opt.subtitle}
+                  icon={opt.icon}
+                  onPress={() => {
+                    triggerHaptic();
+                    setGoal(opt.id);
+                    if (opt.id === 'bulk') {
+                      setCalorieAdjustment((prev) => (prev === 500 ? 500 : 300));
+                    } else if (opt.id === 'cut') {
+                      setCalorieAdjustment((prev) => (prev === -500 ? -500 : -300));
+                    } else {
+                      setCalorieAdjustment(0);
+                    }
+                  }}
+                />
+              ))}
             </View>
           </View>
         )}
@@ -1194,16 +1183,15 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
         {/* STEP 6: CONDITIONAL CALORIE ADJUSTMENT */}
         {currentStep === 6 && (goal === 'bulk' || goal === 'cut') && (
           <View style={styles.stepSection}>
-            <View style={styles.centeredTitleGroup}>
-              <Text style={styles.centeredStepTitle}>
-                {goal === 'bulk' ? 'Select your calorie surplus' : 'Select your calorie deficit'}
-              </Text>
-              <Text style={styles.stepSubtitleText}>
-                {goal === 'bulk'
+            <StepTitleGroup
+              title={goal === 'bulk' ? 'Select your calorie surplus' : 'Select your calorie deficit'}
+              subtitle={
+                goal === 'bulk'
                   ? 'Choose how many extra calories to add above your daily maintenance level.'
-                  : 'Choose how many calories to subtract below your daily maintenance level.'}
-              </Text>
-            </View>
+                  : 'Choose how many calories to subtract below your daily maintenance level.'
+              }
+              stepKey={currentStep}
+            />
 
             <View style={styles.optionsList}>
               {(goal === 'bulk'
@@ -1211,14 +1199,14 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
                     {
                       value: 300,
                       title: '+300 Calories',
-                      badge: 'Lean Bulk',
+                      tag: 'Lean Bulk',
                       subtitle: 'Gradual, steady lean muscle gain with minimal fat retention.',
                       icon: Flame,
                     },
                     {
                       value: 500,
                       title: '+500 Calories',
-                      badge: 'Aggressive Bulk',
+                      tag: 'Aggressive Bulk',
                       subtitle: 'Accelerated mass building and higher lifting strength progression.',
                       icon: Zap,
                     },
@@ -1227,58 +1215,38 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
                     {
                       value: -300,
                       title: '-300 Calories',
-                      badge: 'Moderate Cut',
+                      tag: 'Moderate Cut',
                       subtitle: 'Sustainable, steady fat loss while preserving maximum lean muscle mass.',
                       icon: Flame,
                     },
                     {
                       value: -500,
                       title: '-500 Calories',
-                      badge: 'Aggressive Cut',
+                      tag: 'Aggressive Cut',
                       subtitle: 'Faster fat shredding and definition for accelerated transformation.',
                       icon: Zap,
                     },
                   ]
-              ).map((opt) => {
-                const isSelected = calorieAdjustment === opt.value;
-                const IconComponent = opt.icon;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[styles.optionCard, isSelected && styles.optionCardSelected]}
-                    onPress={() => {
-                      triggerHaptic();
-                      setCalorieAdjustment(opt.value);
-                    }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel={opt.title}
-                  >
-                    <View style={[styles.optionIconBox, isSelected && styles.optionIconBoxSelected]}>
-                      <IconComponent size={22} color={isSelected ? '#000000' : '#FFFFFF'} strokeWidth={2.5} />
-                    </View>
-                    <View style={styles.optionContent}>
-                      <View style={styles.optionHeaderRow}>
-                        <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
-                          {opt.title}
-                        </Text>
-                        <View style={[styles.tagBadge, isSelected && styles.tagBadgeSelected]}>
-                          <Text style={[styles.tagBadgeText, isSelected && styles.tagBadgeTextSelected]}>
-                            {opt.badge}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
-                    </View>
-                    <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
-                      {isSelected && <Check size={14} color="#000000" strokeWidth={3} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+              ).map((opt, idx) => (
+                <AppleSelectionCard
+                  key={opt.value}
+                  index={idx}
+                  stepKey={currentStep}
+                  isSelected={calorieAdjustment === opt.value}
+                  title={opt.title}
+                  tag={opt.tag}
+                  subtitle={opt.subtitle}
+                  icon={opt.icon}
+                  onPress={() => {
+                    triggerHaptic();
+                    setCalorieAdjustment(opt.value);
+                  }}
+                />
+              ))}
             </View>
           </View>
         )}
+        </Animated.View>
       </ScrollView>
 
       {/* Bottom CTA Button */}
@@ -1287,7 +1255,7 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
           style={[styles.primaryButton, isSaving && styles.primaryButtonDisabled]}
           onPress={handleNext}
           disabled={isSaving}
-          activeOpacity={0.85}
+          activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel={
             (currentStep === 5 && goal === 'maintain') || currentStep === 6
@@ -1296,16 +1264,13 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
           }
         >
           {isSaving ? (
-            <ActivityIndicator size="small" color="#000000" />
+            <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <View style={styles.buttonContent}>
-              <Text style={styles.primaryButtonText}>
-                {(currentStep === 5 && goal === 'maintain') || currentStep === 6
-                  ? 'Complete Profile Setup'
-                  : 'Continue'}
-              </Text>
-              <ChevronRight size={18} color="#000000" strokeWidth={2.5} />
-            </View>
+            <Text style={styles.primaryButtonText}>
+              {(currentStep === 5 && goal === 'maintain') || currentStep === 6
+                ? 'Complete Profile Setup'
+                : 'Continue'}
+            </Text>
           )}
         </TouchableOpacity>
       </View>
@@ -1322,148 +1287,53 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  navBar: {
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    marginBottom: 8,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
+    width: 44,
+    height: 44,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+    marginLeft: -4,
   },
-  progressTrackContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginHorizontal: 16,
+  progressTrack: {
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 1.5,
+    overflow: 'hidden',
+    width: '100%',
   },
-  progressBarSegment: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  progressBarSegmentActive: {
-    backgroundColor: '#FFD600',
-  },
-  stepBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  stepBadgeText: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#E5E5E5',
-    letterSpacing: 0.5,
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#007AFF',
+    borderRadius: 1.5,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 32,
+  },
+  stepWrapper: {
+    flex: 1,
   },
   stepSection: {
     flex: 1,
   },
-  titleGroup: {
-    marginBottom: 28,
-  },
-  stepTitle: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-    marginBottom: 8,
-  },
-  stepSubtitle: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 15,
-    fontWeight: '400',
-    color: '#A0A0A0',
-    lineHeight: 22,
-  },
-  optionsList: {
-    gap: 12,
-  },
-  optionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141414',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 16,
-    padding: 18,
-  },
-  optionCardSelected: {
-    borderColor: '#FFFFFF',
-    backgroundColor: '#1C1C1C',
-  },
-  optionIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#222222',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  optionIconBoxSelected: {
-    backgroundColor: '#FFFFFF',
-  },
-  optionContent: {
-    flex: 1,
-  },
-  optionTitle: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  optionTitleSelected: {
-    color: '#FFFFFF',
-  },
-  optionSubtitle: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 13,
-    color: '#8A8A8A',
-  },
-  checkCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
-  },
-  checkCircleSelected: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
-  },
-
-  // Centered Title for Step 2 (Matching reference image)
   centeredTitleGroup: {
     alignItems: 'center',
     marginTop: 16,
-    marginBottom: 32,
+    marginBottom: 28,
   },
   centeredStepTitle: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 30,
     fontWeight: '700',
     color: '#FFFFFF',
@@ -1472,13 +1342,44 @@ const styles = StyleSheet.create({
     lineHeight: 38,
   },
   stepSubtitleText: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 14,
-    color: '#8E8E93',
+    color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,
     paddingHorizontal: 16,
+  },
+  optionsList: {
+    gap: 12,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(28, 28, 30, 0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    padding: 16,
+    ...(Platform.OS === 'web'
+      ? {
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+        } as any
+      : {}),
+  },
+  optionCardSelected: {
+    borderColor: '#007AFF',
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
+  },
+  optionIconBox: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  optionContent: {
+    flex: 1,
   },
   optionHeaderRow: {
     flexDirection: 'row',
@@ -1486,24 +1387,55 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 4,
   },
+  optionTitle: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
+  },
+  optionTitleSelected: {
+    color: '#FFFFFF',
+  },
+  optionSubtitle: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.6)',
+    lineHeight: 18,
+  },
   tagBadge: {
-    backgroundColor: '#242426',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   tagBadgeSelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(0, 122, 255, 0.2)',
   },
   tagBadgeText: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 11,
-    fontWeight: '700',
-    color: '#A0A0A5',
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.6)',
     textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   tagBadgeTextSelected: {
-    color: '#000000',
+    color: '#007AFF',
+  },
+  checkCircleWrapper: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  unselectedRing: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
 
   // 3-Column Drum Wheel Picker
@@ -1518,10 +1450,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 8,
     right: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     zIndex: 0,
   },
   wheelColumnMonth: {
@@ -1541,7 +1473,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   wheelItemText: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 18,
     color: '#CCCCCC',
     fontWeight: '400',
@@ -1611,80 +1543,38 @@ const styles = StyleSheet.create({
   // Steps 3 & 4
   unitToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: '#161616',
-    borderRadius: 12,
-    padding: 4,
+    backgroundColor: 'rgba(28, 28, 30, 0.8)',
+    borderRadius: 10,
+    padding: 3,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   unitToggleTab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 9,
+    borderRadius: 8,
   },
   unitToggleTabActive: {
-    backgroundColor: '#282828',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   unitToggleText: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 13,
-    fontWeight: '600',
-    color: '#8A8A8A',
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   unitToggleTextActive: {
     color: '#FFFFFF',
+    fontWeight: '600',
   },
-  dialCardContainer: {
+  optionWheelCardContainer: {
     width: '100%',
-    marginHorizontal: -24,
-    height: 195,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    position: 'relative',
-    marginBottom: 16,
-    justifyContent: 'flex-start',
     alignItems: 'center',
-  },
-  readoutBubble: {
-    position: 'absolute',
-    top: 6,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 18,
-    paddingVertical: 6,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
-    zIndex: 10,
-  },
-  readoutBubbleNumber: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#000000',
-    letterSpacing: -0.5,
-  },
-  readoutBubbleUnit: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#52525B',
-    marginLeft: 4,
-  },
-  weightSecondaryContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  weightSecondaryText: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#71717A',
+    justifyContent: 'center',
+    marginTop: 4,
+    marginBottom: 8,
   },
   verticalHeightSetterContainer: {
     flexDirection: 'row',
@@ -1707,23 +1597,23 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   heightHeroNumber: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 52,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -1,
   },
   heightHeroUnit: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 20,
     fontWeight: '700',
-    color: '#10B981',
+    color: '#007AFF',
   },
   heightHeroSecondary: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 15,
     fontWeight: '500',
-    color: '#71717A',
+    color: 'rgba(255, 255, 255, 0.6)',
     marginTop: 6,
   },
   verticalRulerArea: {
@@ -1748,7 +1638,7 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   summaryCard: {
-    backgroundColor: '#141414',
+    backgroundColor: 'rgba(28, 28, 30, 0.8)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 16,
@@ -1762,15 +1652,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   summaryLabel: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 11,
-    color: '#777777',
+    color: 'rgba(255, 255, 255, 0.5)',
     marginBottom: 4,
     textTransform: 'uppercase',
     fontWeight: '600',
   },
   summaryValue: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
@@ -1781,31 +1671,33 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   footer: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: '#0A0A0A',
   },
   primaryButton: {
-    backgroundColor: '#FFD600',
+    backgroundColor: '#007AFF',
     borderRadius: 14,
-    height: 54,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
   },
   primaryButtonDisabled: {
-    opacity: 0.7,
-  },
-  buttonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    opacity: 0.6,
   },
   primaryButtonText: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#000000',
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
   },
 });

@@ -76,10 +76,12 @@ Water intake is a candidate for future server-side synchronization.
   - `fat_g`: number
   - `serving_size`: string
 
-### AI Coach Chatbot
-- **Requirement:** Needs LLM endpoint (e.g., OpenAI gpt-4o).
+### AI Coach Chatbot (Implemented)
+- **Status:** Live & Operational via Groq Cloud LLM (`openai/gpt-oss-120b` with `qwen/qwen3.8-27b` fallback).
+- **Endpoint:** `POST /api/v1/chat`
 - **Request Contract:**
   - `messages`: Array of `{ role: string, content: string }`
-  - `user_context`: `{ weight_kg, weekly_workout_goal, intensity }`
+  - `user_context`: `{ weight_kg, weekly_workout_goal, intensity, recent_workout_title, daily_calories_today }`
 - **Response Contract:**
   - `content`: string (AI's reply)
+- **Offline Fallback:** Automatically falls back to local heuristic response engine if offline.

@@ -10,7 +10,7 @@ import {
   Platform,
   Easing,
 } from 'react-native';
-import { ChevronRight, Check } from 'lucide-react-native';
+import { ChevronRight, Check } from './icons';
 import * as Haptics from 'expo-haptics';
 import { typography, borderRadius, spacing } from '../theme';
 

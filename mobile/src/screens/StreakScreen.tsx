@@ -11,17 +11,14 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Flame } from 'lucide-react-native';
-import { Svg, Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ArrowLeft, Flame } from '../components/icons';
 import * as Haptics from 'expo-haptics';
 import { colors, typography, borderRadius, spacing } from '../theme';
+import { DarkVeil } from '../components/DarkVeil';
 
 interface StreakScreenProps {
   navigation: any;
 }
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const WEEK_DAYS = [
   { day: 'Su', full: 'Sunday', active: true },
@@ -45,6 +42,14 @@ export const StreakScreen: React.FC<StreakScreenProps> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      {/* Animated Dark Veil Background */}
+      <DarkVeil
+        speed={0.35}
+        warpAmount={0.25}
+        noiseIntensity={0.01}
+        orangeMode={true}
+      />
+
       {/* Top Navigation Bar */}
       <View style={styles.navBar}>
         <TouchableOpacity
@@ -65,44 +70,8 @@ export const StreakScreen: React.FC<StreakScreenProps> = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Arch & Flame Section */}
+        {/* Hero Flame Section */}
         <View style={styles.heroSection}>
-          {/* Radiant Rainbow Curved Arches */}
-          <View style={styles.arcContainer} pointerEvents="none">
-            <Svg width={SCREEN_WIDTH} height={120} viewBox={`0 0 ${SCREEN_WIDTH} 120`}>
-              <Defs>
-                <SvgLinearGradient id="arcGradOuter" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <Stop offset="0%" stopColor="#FFD600" stopOpacity="0.05" />
-                  <Stop offset="50%" stopColor="#FF9500" stopOpacity="0.45" />
-                  <Stop offset="100%" stopColor="#FFD600" stopOpacity="0.05" />
-                </SvgLinearGradient>
-                <SvgLinearGradient id="arcGradInner" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <Stop offset="0%" stopColor="#FF6B00" stopOpacity="0.08" />
-                  <Stop offset="50%" stopColor="#FF5722" stopOpacity="0.75" />
-                  <Stop offset="100%" stopColor="#FF6B00" stopOpacity="0.08" />
-                </SvgLinearGradient>
-              </Defs>
-
-              {/* Outer Golden Glow Arc */}
-              <Path
-                d={`M -20,110 Q ${SCREEN_WIDTH / 2},12 ${SCREEN_WIDTH + 20},110`}
-                fill="none"
-                stroke="url(#arcGradOuter)"
-                strokeWidth={16}
-                strokeLinecap="round"
-              />
-
-              {/* Inner Radiant Orange Arc */}
-              <Path
-                d={`M -10,110 Q ${SCREEN_WIDTH / 2},26 ${SCREEN_WIDTH + 10},110`}
-                fill="none"
-                stroke="url(#arcGradInner)"
-                strokeWidth={10}
-                strokeLinecap="round"
-              />
-            </Svg>
-          </View>
-
           {/* Animated Flame GIF at Peak - No Container */}
           <Image
             source={require('../../assets/gif/Fire Streak Orange.gif')}
@@ -192,6 +161,8 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#000000',
+    position: 'relative',
+    overflow: 'hidden',
   },
   navBar: {
     height: 56,
@@ -199,17 +170,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
+    zIndex: 10,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#161616',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(22, 22, 26, 0.65)' : '#161616',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+    } as any : {}),
   },
   navTitle: {
     fontFamily: typography.fonts.headingBold,
@@ -230,27 +206,18 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Hero section with Arch & Flame
+  // Hero section with Flame
   heroSection: {
     alignItems: 'center',
     position: 'relative',
-    marginTop: 10,
+    marginTop: 14,
     marginBottom: 28,
-  },
-  arcContainer: {
-    position: 'absolute',
-    top: 6,
-    left: -20,
-    right: -20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 0,
   },
   heroFlameGif: {
     width: 140,
     height: 140,
     zIndex: 1,
-    marginTop: -8,
+    marginTop: 4,
     marginBottom: 6,
   },
   capsuleFlameGif: {
@@ -289,13 +256,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#121214',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(18, 18, 22, 0.65)' : '#121214',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 18,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    borderRadius: 20,
     paddingVertical: 18,
     paddingHorizontal: 12,
     marginBottom: 32,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 6,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(20px) saturate(190%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(190%)',
+    } as any : {}),
   },
   statColumn: {
     flex: 1,

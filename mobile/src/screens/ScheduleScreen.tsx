@@ -29,7 +29,7 @@ import {
   ShieldAlert,
   List as ListIcon,
   CalendarDays,
-} from 'lucide-react-native';
+} from '../components/icons';
 import { colors, typography, borderRadius, spacing } from '../theme';
 import { SessionCardSkeleton } from '../components/SkeletonLoader';
 import { EmptyState } from '../components/EmptyState';

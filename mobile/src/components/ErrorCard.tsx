@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { AlertCircle, RefreshCw } from 'lucide-react-native';
+import { AlertCircle, RefreshCw } from './icons';
 import { colors, typography, borderRadius, spacing } from '../theme';
 
 interface ErrorCardProps {

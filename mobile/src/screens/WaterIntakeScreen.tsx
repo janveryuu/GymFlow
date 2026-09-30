@@ -2,14 +2,16 @@ import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, SafeAreaView, Alert, Modal, Pressable, Dimensions,
+  Platform,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, Droplets, Plus, X, Lock } from 'lucide-react-native';
+import { ArrowLeft, Droplets, Plus, X, Lock } from '../components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, borderRadius } from '../theme';
 import { PercentRing } from '../components/PercentRing';
 import { getDatabase } from '../db/connection';
 import { useAuthStore } from '../store/authStore';
+import { PrismBackground } from '../components/PrismBackground';
 import * as Crypto from 'expo-crypto';
 
 // ---------------------------------------------------------------------------
@@ -127,46 +129,67 @@ export const WaterIntakeScreen: React.FC = () => {
   if (!isProfileComplete) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Luminous Animated 3D Prism Background in Electric Cyan */}
+        <PrismBackground
+          height={3.5}
+          baseWidth={5.5}
+          animationType="rotate"
+          glow={1}
+          noise={0.3}
+          transparent={true}
+          scale={1.0}
+          offset={{ x: 0, y: -310 }}
+          hueShift={0}
+          colorFrequency={1}
+          bloom={1}
+          timeScale={0.5}
+          tintColor="#00E5FF"
+          gradientColor="#FFFFFF"
+        />
+
         <View style={styles.header}>
           <TouchableOpacity
+            style={styles.headerCircleBtn}
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <ArrowLeft color={colors.text} size={24} />
+            <ArrowLeft color={colors.text} size={18} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Water Intake</Text>
-          <View style={{ width: 24 }} />
+          <View style={{ width: 40 }} />
         </View>
 
         <View style={styles.gateContainer}>
-          <View style={styles.gateIconWrapper}>
-            <Lock size={38} color="#00E5FF" />
+          <View style={styles.gateCard}>
+            <View style={styles.gateIconWrapper}>
+              <Lock size={38} color="#00E5FF" />
+            </View>
+            <Text style={styles.gateTitle}>Profile Setup Required</Text>
+            <Text style={styles.gateMessage}>
+              You must complete the profile setup in order to use this feature. Setting your weight and intensity is required to calculate accurate daily hydration targets.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.gatePrimaryBtn}
+              onPress={() => navigation.navigate('ProfileSetup')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Complete Profile Setup"
+            >
+              <Text style={styles.gatePrimaryBtnText}>Complete Profile Setup</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.gateSecondaryBtn}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Go Back"
+            >
+              <Text style={styles.gateSecondaryBtnText}>Go Back</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.gateTitle}>Profile Setup Required</Text>
-          <Text style={styles.gateMessage}>
-            You must complete the profile setup in order to use this feature. Setting your weight and intensity is required to calculate accurate daily hydration targets.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.gatePrimaryBtn}
-            onPress={() => navigation.navigate('ProfileSetup')}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Complete Profile Setup"
-          >
-            <Text style={styles.gatePrimaryBtnText}>Complete Profile Setup</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gateSecondaryBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Go Back"
-          >
-            <Text style={styles.gateSecondaryBtnText}>Go Back</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -174,12 +197,35 @@ export const WaterIntakeScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Luminous Animated 3D Prism Background in Electric Cyan */}
+      <PrismBackground
+        height={3.5}
+        baseWidth={5.5}
+        animationType="rotate"
+        glow={1}
+        noise={0.3}
+        transparent={true}
+        scale={1.0}
+        offset={{ x: 0, y: -310 }}
+        hueShift={0}
+        colorFrequency={1}
+        bloom={1}
+        timeScale={0.5}
+        tintColor="#00E5FF"
+        gradientColor="#FFFFFF"
+      />
+
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button">
-          <ArrowLeft color={colors.text} size={24} />
+        <TouchableOpacity
+          style={styles.headerCircleBtn}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <ArrowLeft color={colors.text} size={18} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Water Intake</Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -312,43 +358,296 @@ export const WaterIntakeScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container:     { flex: 1, backgroundColor: colors.background },
-  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  headerTitle:   { fontSize: typography.sizes.lg, fontFamily: typography.fonts.headingBold, color: colors.text },
-  content:       { padding: 20 },
-  ringContainer: { alignItems: 'center', marginBottom: 28, marginTop: 4 },
-  targetLabel:   { marginTop: 14, fontSize: typography.sizes.sm, fontFamily: typography.fonts.headingBold, color: colors.text, textAlign: 'center' },
-  formulaNote:   { fontSize: typography.sizes.xs, color: colors.textMuted, textAlign: 'center', marginTop: 4 },
-  sectionTitle:  { fontSize: typography.sizes.base, fontFamily: typography.fonts.headingBold, color: colors.text, marginBottom: 12, marginTop: 6 },
-  quickGrid:     { gap: 10, marginBottom: 24 },
-  quickRow:      { flexDirection: 'row', gap: 10 },
-  quickBtnWrapper: { flex: 1, borderRadius: borderRadius.lg, overflow: 'hidden' },
-  quickBtnGradient: { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 12, borderRadius: borderRadius.lg, gap: 8, backgroundColor: '#FFFFFF' },
-  quickBtn:      { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, paddingVertical: 14, paddingHorizontal: 12, borderRadius: borderRadius.lg, gap: 8 },
-  quickBtnOutline: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  quickBtnText:  { color: colors.textInverse, fontWeight: '700', fontSize: typography.sizes.sm },
-  emptyCard:     { backgroundColor: colors.surface, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, padding: 32, alignItems: 'center', gap: 8 },
-  emptyText:     { fontSize: typography.sizes.sm, fontWeight: '500', color: colors.textSecondary, textAlign: 'center' },
-  emptySubtext:  { fontSize: typography.sizes.xs, color: colors.textMuted, textAlign: 'center' },
-  logList:       { gap: 10 },
-  logCard:       { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, shadowColor: '#000000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
-  logAmount:     { fontSize: typography.sizes.sm, fontWeight: '700', color: colors.text },
-  logTime:       { fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 2 },
-  overlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalCard:     { backgroundColor: colors.surface, borderRadius: borderRadius.xl, padding: 24, width: '100%', maxWidth: 360 },
-  modalTitle:    { fontSize: typography.sizes.lg, fontFamily: typography.fonts.headingBold, color: colors.text, marginBottom: 16 },
-  modalInput:    { backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, padding: 14, fontSize: typography.sizes.base, color: colors.text, marginBottom: 16 },
-  modalRow:      { flexDirection: 'row', gap: 12 },
-  cancelBtn:     { flex: 1, padding: 14, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
-  cancelText:    { fontSize: typography.sizes.sm, fontWeight: '500', color: colors.textSecondary },
-  addBtn:        { flex: 1, padding: 14, borderRadius: borderRadius.md, backgroundColor: colors.primary, alignItems: 'center' },
-  addText:       { fontSize: typography.sizes.sm, fontWeight: '700', color: colors.textInverse },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.10)',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(0, 0, 0, 0.35)' : 'transparent',
+    zIndex: 10,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+    } as any : {}),
+  },
+  headerCircleBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+    } as any : {}),
+  },
+  headerTitle: {
+    fontSize: typography.sizes.lg,
+    fontFamily: typography.fonts.headingBold,
+    color: colors.text,
+  },
+  content: {
+    padding: 20,
+  },
+  ringContainer: {
+    alignItems: 'center',
+    marginBottom: 28,
+    marginTop: 8,
+  },
+  targetLabel: {
+    marginTop: 14,
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.headingBold,
+    color: colors.text,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  formulaNote: {
+    fontSize: typography.sizes.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  sectionTitle: {
+    fontSize: typography.sizes.base,
+    fontFamily: typography.fonts.headingBold,
+    color: colors.text,
+    marginBottom: 12,
+    marginTop: 6,
+    textShadowColor: 'rgba(0, 0, 0, 0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  quickGrid: {
+    gap: 10,
+    marginBottom: 24,
+  },
+  quickRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quickBtnWrapper: {
+    flex: 1,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  quickBtnGradient: {
+    flex: 1,
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.lg,
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  quickBtn: {
+    flex: 1,
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.lg,
+    gap: 8,
+  },
+  quickBtnOutline: {
+    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+    } as any : {}),
+  },
+  quickBtnText: {
+    color: colors.textInverse,
+    fontWeight: '700',
+    fontSize: typography.sizes.sm,
+  },
+  emptyCard: {
+    backgroundColor: Platform.OS === 'web' ? 'rgba(14, 14, 18, 0.65)' : 'rgba(18, 18, 22, 0.85)',
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    padding: 32,
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(20px) saturate(190%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(190%)',
+    } as any : {}),
+  },
+  emptyText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: typography.sizes.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  logList: {
+    gap: 10,
+  },
+  logCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(14, 14, 18, 0.65)' : 'rgba(18, 18, 22, 0.85)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    padding: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(20px) saturate(190%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(190%)',
+    } as any : {}),
+  },
+  logAmount: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  logTime: {
+    fontSize: typography.sizes.xs,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: Platform.OS === 'web' ? 'rgba(16, 16, 22, 0.88)' : 'rgba(20, 20, 26, 0.95)',
+    borderRadius: borderRadius.xl,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.20)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 10,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(28px) saturate(190%)',
+      WebkitBackdropFilter: 'blur(28px) saturate(190%)',
+    } as any : {}),
+  },
+  modalTitle: {
+    fontSize: typography.sizes.lg,
+    fontFamily: typography.fonts.headingBold,
+    color: colors.text,
+    marginBottom: 16,
+  },
+  modalInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    borderRadius: borderRadius.md,
+    padding: 14,
+    fontSize: typography.sizes.base,
+    color: colors.text,
+    marginBottom: 16,
+  },
+  modalRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    alignItems: 'center',
+  },
+  cancelText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  addBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+  },
+  addText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '700',
+    color: colors.textInverse,
+  },
   gateContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
     paddingBottom: 40,
+  },
+  gateCard: {
+    backgroundColor: Platform.OS === 'web' ? 'rgba(14, 14, 18, 0.65)' : 'rgba(18, 18, 22, 0.85)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    padding: 28,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 420,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    elevation: 8,
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(24px) saturate(190%)',
+      WebkitBackdropFilter: 'blur(24px) saturate(190%)',
+    } as any : {}),
   },
   gateIconWrapper: {
     width: 84,
@@ -378,7 +677,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   gatePrimaryBtn: {
-    backgroundColor: '#FFD600',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: borderRadius.lg,
@@ -386,9 +685,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
-    shadowColor: '#FFD600',
+    shadowColor: '#FFFFFF',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -406,8 +705,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#2C2C2E',
-    backgroundColor: '#1C1C1E',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.12)',
   },
   gateSecondaryBtnText: {
     color: colors.textSecondary,

@@ -22,7 +22,7 @@ import {
   ArrowLeft,
   Camera,
   Image as ImageLucide,
-} from 'lucide-react-native';
+} from '../components/icons';
 import * as Crypto from 'expo-crypto';
 
 import { colors, typography, borderRadius } from '../theme';

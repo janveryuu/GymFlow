@@ -15,7 +15,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Lock, Mail, AlertCircle, Zap, ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react-native';
+import { Lock, Mail, AlertCircle, Zap, ArrowLeft, CheckCircle2, Sparkles } from '../../components/icons';
 import Svg, { Path } from 'react-native-svg';
 import { colors, typography, borderRadius, spacing } from '../../theme';
 import { apiClient, setAuthToken } from '../../api/client';

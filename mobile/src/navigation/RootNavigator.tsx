@@ -32,6 +32,7 @@ import { CustomWorkoutDetailScreen } from '../screens/CustomWorkoutDetailScreen'
 import { WorkoutHistoryScreen } from '../screens/WorkoutHistoryScreen';
 import { AiWorkoutGenerateScreen } from '../screens/AiWorkoutGenerateScreen';
 import { StreakScreen } from '../screens/StreakScreen';
+import { ExerciseDetailScreen } from '../screens/ExerciseDetailScreen';
 
 import type { RootStackParamList, AuthStackParamList, MainTabParamList } from './types';
 
@@ -52,7 +53,11 @@ const AuthNavigator: React.FC = () => {
       <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
       <AuthStack.Screen name="Onboarding" component={OnboardingScreen} />
       <AuthStack.Screen name="Login" component={LoginScreen} />
-      <AuthStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+      <AuthStack.Screen
+        name="ProfileSetup"
+        component={ProfileSetupScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
       <AuthStack.Screen name="ForcedPasswordReset" component={ForcedPasswordResetScreen} />
       <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </AuthStack.Navigator>
@@ -143,6 +148,7 @@ export const RootNavigator: React.FC = () => {
             <Stack.Screen name="WorkoutHistoryScreen" component={WorkoutHistoryScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="AiWorkoutGenerateScreen" component={AiWorkoutGenerateScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="StreakScreen" component={StreakScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ExerciseDetailScreen" component={ExerciseDetailScreen} options={{ animation: 'slide_from_right' }} />
           </>
         )}
       </Stack.Navigator>

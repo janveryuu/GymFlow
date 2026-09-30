@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,14 @@ import {
   Easing,
   ActivityIndicator,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import {
   ChevronLeft,
+  ChevronRight,
   Sparkles,
   ArrowRight,
   CheckCircle2,
@@ -28,13 +30,233 @@ import {
   ShieldCheck,
   Check,
   Calendar,
-} from 'lucide-react-native';
+  Activity,
+} from '../components/icons';
 import { colors, typography, borderRadius, spacing } from '../theme';
 import { WorkoutIllustration } from '../components/WorkoutIllustration';
+import { ThoughtLine } from '../components/ThoughtLine';
 import { useCustomWorkoutsStore, CustomExerciseItem, CustomRoutineWorkout } from '../store/customWorkoutsStore';
 
 type FrequencyOption = '1-2' | '3-4' | '5-6' | '7';
 type DifficultyOption = 'beginner' | 'intermediate' | 'advanced';
+
+const APPLE_FONT_FAMILY = Platform.OS === 'web'
+  ? '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif'
+  : Platform.OS === 'ios'
+  ? 'System'
+  : 'Roboto';
+
+/**
+ * Animated Step Title Group matching ProfileSetupScreen UI/UX (+20px to 0px fade)
+ */
+interface StepTitleGroupProps {
+  title: string;
+  subtitle?: string;
+  stepKey: number;
+}
+
+const StepTitleGroup: React.FC<StepTitleGroupProps> = ({ title, subtitle, stepKey }) => {
+  const entranceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    entranceAnim.setValue(0);
+    Animated.timing(entranceAnim, {
+      toValue: 1,
+      duration: 300,
+      easing: Easing.bezier(0.32, 0.72, 0, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [stepKey]);
+
+  const translateY = entranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.centeredTitleGroup,
+        {
+          opacity: entranceAnim,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      <Text style={styles.centeredStepTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.stepSubtitleText}>{subtitle}</Text> : null}
+    </Animated.View>
+  );
+};
+
+/**
+ * Apple Inset Grouped Selection Card with:
+ * - Tap Physics: spring scale to 0.97 on press
+ * - Staggered Entrance: +20px to 0px fade with 50ms delay
+ * - iOS dark translucent background rgba(28, 28, 30, 0.8) & 16px squircle
+ * - Neutral translucent icon box background rgba(255, 255, 255, 0.08)
+ * - Right-aligned checkmark.circle.fill on selection
+ */
+interface AppleSelectionCardProps {
+  isSelected: boolean;
+  onPress: () => void;
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  title: string;
+  subtitle: string;
+  tag?: string;
+  index: number;
+  stepKey: number;
+}
+
+const AppleSelectionCard: React.FC<AppleSelectionCardProps> = ({
+  isSelected,
+  onPress,
+  icon: IconComponent,
+  title,
+  subtitle,
+  tag,
+  index,
+  stepKey,
+}) => {
+  const pressScale = useRef(new Animated.Value(1)).current;
+  const entranceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    entranceAnim.setValue(0);
+    const timer = setTimeout(() => {
+      Animated.timing(entranceAnim, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.bezier(0.32, 0.72, 0, 1),
+        useNativeDriver: true,
+      }).start();
+    }, 50 * (index + 1));
+    return () => clearTimeout(timer);
+  }, [stepKey, index]);
+
+  const handlePressIn = () => {
+    Animated.spring(pressScale, {
+      toValue: 0.97,
+      friction: 8,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressScale, {
+      toValue: 1,
+      friction: 8,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const translateY = entranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+
+  return (
+    <Animated.View
+      style={{
+        opacity: entranceAnim,
+        transform: [{ translateY }, { scale: pressScale }],
+      }}
+    >
+      <TouchableOpacity
+        style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.9}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+      >
+        <View style={styles.optionIconBox}>
+          <IconComponent size={22} color="rgba(255, 255, 255, 0.6)" strokeWidth={2} />
+        </View>
+        <View style={styles.optionContent}>
+          <View style={styles.optionHeaderRow}>
+            <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
+              {title}
+            </Text>
+            {tag ? (
+              <View style={[styles.tagBadge, isSelected && styles.tagBadgeSelected]}>
+                <Text style={[styles.tagBadgeText, isSelected && styles.tagBadgeTextSelected]}>
+                  {tag}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.optionSubtitle}>{subtitle}</Text>
+        </View>
+        <View style={styles.checkCircleWrapper}>
+          {isSelected ? (
+            <CheckCircle2 size={22} color="#007AFF" />
+          ) : (
+            <View style={styles.unselectedRing} />
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+const FREQUENCY_OPTIONS = [
+  {
+    id: '1-2' as FrequencyOption,
+    title: '1–2 Days / week',
+    tag: 'Full Body',
+    subtitle: 'Full-body training each session. Maximum stimulus with minimal time investment.',
+    icon: Calendar,
+  },
+  {
+    id: '3-4' as FrequencyOption,
+    title: '3–4 Days / week',
+    tag: 'Gold Standard',
+    subtitle: 'The gold standard PPL split for muscle hypertrophy and progressive overload.',
+    icon: Activity,
+  },
+  {
+    id: '5-6' as FrequencyOption,
+    title: '5–6 Days / week',
+    tag: 'High Volume',
+    subtitle: 'Double rotation push-pull-legs for maximum weekly volume and frequency.',
+    icon: Flame,
+  },
+  {
+    id: '7' as FrequencyOption,
+    title: 'Everyday (7 Days)',
+    tag: 'Dedicated',
+    subtitle: 'Dedicated body part split with active recovery. Full dedication protocol.',
+    icon: Zap,
+  },
+];
+
+const DIFFICULTY_OPTIONS = [
+  {
+    id: 'beginner' as DifficultyOption,
+    title: 'Beginner',
+    tag: 'Foundation',
+    subtitle: 'Movement pattern mastery, controlled tempo, and generous rest intervals for joint integrity.',
+    icon: ShieldCheck,
+  },
+  {
+    id: 'intermediate' as DifficultyOption,
+    title: 'Intermediate',
+    tag: 'Optimal Hypertrophy',
+    subtitle: 'Compound and accessory synergy, progressive overload, and standard rest periods.',
+    icon: Activity,
+  },
+  {
+    id: 'advanced' as DifficultyOption,
+    title: 'Advanced',
+    tag: 'Peak Tension',
+    subtitle: 'Heavy multi-joint compound anchors, intensity techniques, strict rest, and peak output.',
+    icon: Zap,
+  },
+];
 
 interface GeneratedDayRoutine {
   dayLabel: string;       // e.g. "Day 1 – Push", "Day 2 – Pull"
@@ -76,7 +298,6 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const progressWidth = useRef(new Animated.Value(0.5)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const dotAnims = useRef([
     new Animated.Value(0),
@@ -84,17 +305,56 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
     new Animated.Value(0),
   ]).current;
 
-  // Step indicator animation
+  // Screen push transition matching ProfileSetupScreen: 300ms cubic-bezier(0.32, 0.72, 0, 1)
+  const IOS_PUSH_EASING = useMemo(() => Easing.bezier(0.32, 0.72, 0, 1), []);
+  const stepSlideAnim = useRef(new Animated.Value(0)).current;
+  const stepOpacityAnim = useRef(new Animated.Value(1)).current;
+  const prevStepRef = useRef(currentStep);
+
+  useEffect(() => {
+    if (prevStepRef.current === currentStep) return;
+    const direction = currentStep > prevStepRef.current ? 1 : -1;
+    prevStepRef.current = currentStep;
+
+    if (currentStep <= 2) {
+      stepSlideAnim.setValue(direction * 40);
+      stepOpacityAnim.setValue(0);
+
+      Animated.parallel([
+        Animated.timing(stepSlideAnim, {
+          toValue: 0,
+          duration: 300,
+          easing: IOS_PUSH_EASING,
+          useNativeDriver: true,
+        }),
+        Animated.timing(stepOpacityAnim, {
+          toValue: 1,
+          duration: 260,
+          easing: IOS_PUSH_EASING,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [currentStep, IOS_PUSH_EASING]);
+
+  // Continuous slim progress bar animation (ease-in-out curve)
+  const progressAnim = useRef(new Animated.Value(0.5)).current;
+
   useEffect(() => {
     if (currentStep <= 2) {
-      Animated.timing(progressWidth, {
+      Animated.timing(progressAnim, {
         toValue: currentStep / 2,
-        duration: 280,
-        easing: Easing.out(Easing.cubic),
+        duration: 320,
+        easing: Easing.inOut(Easing.ease),
         useNativeDriver: false,
       }).start();
     }
-  }, [currentStep, progressWidth]);
+  }, [currentStep]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   // Start Agentic Pulse loop when in loading phase
   useEffect(() => {
@@ -985,10 +1245,10 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Top Header for Setup Steps (1 and 2) */}
+      {/* Top Header for Setup Steps (1 and 2) matching ProfileSetupScreen */}
       {currentStep <= 2 && (
-        <View style={styles.topSection}>
-          <View style={styles.topBar}>
+        <View style={styles.setupHeader}>
+          <View style={styles.setupNavBar}>
             <TouchableOpacity
               onPress={() => {
                 if (currentStep === 1) {
@@ -997,26 +1257,22 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
                   setCurrentStep(1);
                 }
               }}
-              style={styles.backButton}
-              accessibilityLabel="Back"
+              style={styles.setupBackButton}
+              activeOpacity={0.6}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
-              <ChevronLeft size={22} color={colors.text} strokeWidth={2.5} />
+              <ChevronLeft size={24} color="#007AFF" />
             </TouchableOpacity>
-
-            <Text style={styles.stepCounterText}>Step {currentStep} of 2</Text>
           </View>
 
-          {/* Continuous Progress Bar */}
+          {/* Continuous Slim Animated Progress Bar */}
           <View style={styles.progressTrack}>
             <Animated.View
               style={[
                 styles.progressFill,
-                {
-                  width: progressWidth.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', '100%'],
-                  }),
-                },
+                { width: progressWidth },
               ]}
             />
           </View>
@@ -1028,10 +1284,10 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
         <View style={styles.resultHeader}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
-            style={styles.backButton}
+            style={styles.resultBackButton}
             accessibilityLabel="Close"
           >
-            <ChevronLeft size={22} color={colors.text} strokeWidth={2.5} />
+            <ChevronLeft size={24} color="#007AFF" />
           </TouchableOpacity>
 
           <Text style={styles.resultHeaderTitle}>AI Generated Split</Text>
@@ -1041,7 +1297,7 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
             style={styles.regenerateHeaderBtn}
             accessibilityLabel="Regenerate"
           >
-            <RotateCcw size={18} color={colors.text} />
+            <RotateCcw size={18} color="#007AFF" />
           </TouchableOpacity>
         </View>
       )}
@@ -1051,90 +1307,64 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
       {/* ======================================================== */}
       {currentStep === 1 && (
         <View style={styles.screenWrapper}>
-          <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
-            <View style={styles.headingBlock}>
-              <View style={styles.badgeRow}>
-                <Clock size={15} color={colors.textSecondary} />
-                <Text style={styles.badgeRowText}>TRAINING SCHEDULE</Text>
-              </View>
-              <Text style={styles.headingTitle}>How often do you train?</Text>
-              <Text style={styles.headingSubtitle}>
-                Select your intended weekly frequency so GymFlow AI can calibrate volume, muscle splits, and recovery windows.
-              </Text>
-            </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Animated.View
+              style={[
+                styles.stepWrapper,
+                {
+                  opacity: stepOpacityAnim,
+                  transform: [{ translateX: stepSlideAnim }],
+                },
+              ]}
+            >
+              <StepTitleGroup
+                title="How often do you train?"
+                subtitle="Select your intended weekly frequency so GymFlow AI can calibrate volume, muscle splits, and recovery windows."
+                stepKey={currentStep}
+              />
 
-            <View style={styles.optionsStack}>
-              {[
-                {
-                  id: '1-2' as FrequencyOption,
-                  title: '1–2 Days / week',
-                  desc: 'Full-body training each session. Maximum stimulus with minimal time investment.',
-                },
-                {
-                  id: '3-4' as FrequencyOption,
-                  title: '3–4 Days / week',
-                  desc: 'The gold standard PPL split for muscle hypertrophy and progressive overload.',
-                },
-                {
-                  id: '5-6' as FrequencyOption,
-                  title: '5–6 Days / week',
-                  desc: 'Double rotation push-pull-legs for maximum weekly volume and frequency.',
-                },
-                {
-                  id: '7' as FrequencyOption,
-                  title: 'Everyday (7 Days)',
-                  desc: 'Dedicated body part split with active recovery. Full dedication protocol.',
-                },
-              ].map((item) => {
-                const isSelected = selectedFrequency === item.id;
-                return (
-                  <TouchableOpacity
+              <View style={styles.optionsList}>
+                {FREQUENCY_OPTIONS.map((item, idx) => (
+                  <AppleSelectionCard
                     key={item.id}
-                    style={[styles.optionCard, isSelected && styles.optionCardActive]}
+                    index={idx}
+                    stepKey={currentStep}
+                    isSelected={selectedFrequency === item.id}
+                    title={item.title}
+                    tag={item.tag}
+                    subtitle={item.subtitle}
+                    icon={item.icon}
                     onPress={() => {
                       try {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      } catch {
-                        // Haptics optional
-                      }
+                      } catch {}
                       setSelectedFrequency(item.id);
                     }}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.optionHeaderRow}>
-                        <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                          {item.title}
-                        </Text>
-                      </View>
-                      <Text style={styles.optionDescText}>{item.desc}</Text>
-                    </View>
-
-                    <View style={[styles.radioOuter, isSelected && styles.radioOuterActive]}>
-                      {isSelected && <View style={styles.radioInner} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                  />
+                ))}
+              </View>
+            </Animated.View>
           </ScrollView>
 
           {/* Bottom Action Bar */}
-          <View style={styles.bottomBar}>
+          <View style={styles.footer}>
             <TouchableOpacity
-              style={styles.primaryBtn}
+              style={styles.primaryButton}
               onPress={() => {
                 try {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                } catch {
-                  // Haptics optional
-                }
+                } catch {}
                 setCurrentStep(2);
               }}
-              activeOpacity={0.88}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Continue to Difficulty"
             >
-              <Text style={styles.primaryBtnText}>Continue to Difficulty</Text>
-              <ArrowRight size={18} color={colors.textInverse} style={{ marginLeft: 8 }} />
+              <Text style={styles.primaryButtonText}>Continue</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1145,93 +1375,67 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
       {/* ======================================================== */}
       {currentStep === 2 && (
         <View style={styles.screenWrapper}>
-          <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
-            <View style={styles.headingBlock}>
-              <View style={styles.badgeRow}>
-                <Target size={15} color={colors.textSecondary} />
-                <Text style={styles.badgeRowText}>INTENSITY CALIBRATION</Text>
-              </View>
-              <Text style={styles.headingTitle}>What is your target difficulty?</Text>
-              <Text style={styles.headingSubtitle}>
-                Calibrates technical complexity of exercises, mechanical tension, and target rest periods.
-              </Text>
-            </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Animated.View
+              style={[
+                styles.stepWrapper,
+                {
+                  opacity: stepOpacityAnim,
+                  transform: [{ translateX: stepSlideAnim }],
+                },
+              ]}
+            >
+              <StepTitleGroup
+                title="What is your target difficulty?"
+                subtitle="Calibrates technical complexity of exercises, mechanical tension, and target rest periods."
+                stepKey={currentStep}
+              />
 
-            <View style={styles.optionsStack}>
-              {[
-                {
-                  id: 'beginner' as DifficultyOption,
-                  title: 'Beginner',
-                  badge: 'Foundation',
-                  desc: 'Movement pattern mastery, controlled tempo, and generous rest intervals for joint integrity.',
-                },
-                {
-                  id: 'intermediate' as DifficultyOption,
-                  title: 'Intermediate',
-                  badge: 'Optimal Hypertrophy',
-                  desc: 'Compound and accessory synergy, progressive overload, and standard rest periods.',
-                },
-                {
-                  id: 'advanced' as DifficultyOption,
-                  title: 'Advanced',
-                  badge: 'High Mechanical Tension',
-                  desc: 'Heavy multi-joint compound anchors, intensity techniques, strict rest, and peak output.',
-                },
-              ].map((item) => {
-                const isSelected = selectedDifficulty === item.id;
-                return (
-                  <TouchableOpacity
+              <View style={styles.optionsList}>
+                {DIFFICULTY_OPTIONS.map((item, idx) => (
+                  <AppleSelectionCard
                     key={item.id}
-                    style={[styles.optionCard, isSelected && styles.optionCardActive]}
+                    index={idx}
+                    stepKey={currentStep}
+                    isSelected={selectedDifficulty === item.id}
+                    title={item.title}
+                    tag={item.tag}
+                    subtitle={item.subtitle}
+                    icon={item.icon}
                     onPress={() => {
                       try {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      } catch {
-                        // Haptics optional
-                      }
+                      } catch {}
                       setSelectedDifficulty(item.id);
                     }}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.optionHeaderRow}>
-                        <Text style={[styles.optionTitleText, isSelected && styles.optionTitleTextActive]}>
-                          {item.title}
-                        </Text>
-                        <View style={[styles.badgePill, isSelected && styles.badgePillActive]}>
-                          <Text style={[styles.badgePillText, isSelected && styles.badgePillTextActive]}>
-                            {item.badge}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.optionDescText}>{item.desc}</Text>
-                    </View>
-
-                    <View style={[styles.radioOuter, isSelected && styles.radioOuterActive]}>
-                      {isSelected && <View style={styles.radioInner} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                  />
+                ))}
+              </View>
+            </Animated.View>
           </ScrollView>
 
           {/* Bottom Action Bar */}
-          <View style={styles.bottomBar}>
+          <View style={styles.footer}>
             <TouchableOpacity
-              style={[styles.primaryBtn, styles.generateBtn]}
+              style={styles.primaryButton}
               onPress={() => {
                 try {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                } catch {
-                  // Haptics optional
-                }
+                } catch {}
                 setCurrentStep(3);
               }}
-              activeOpacity={0.88}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Generate AI Workout"
             >
-              <Sparkles size={18} color={colors.textInverse} style={{ marginRight: 8 }} />
-              <Text style={styles.primaryBtnText}>Generate AI Workout</Text>
+              <View style={styles.btnRow}>
+                <Sparkles size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.primaryButtonText}>Generate AI Workout</Text>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -1242,92 +1446,24 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
       {/* ======================================================== */}
       {currentStep === 3 && (
         <Animated.View style={[styles.agenticLoadingFull, { opacity: fadeAnim }]}>
-          <ScrollView
-            contentContainerStyle={styles.agenticScrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.agenticHeading}>
-              <Text style={styles.agenticTitle}>Synthesizing AI Protocol</Text>
-              <Text style={styles.agenticSubtitle}>
-                GymFlow AI is designing your personalized {selectedFrequency}-day workout split.
-              </Text>
-              {/* Animated dots */}
-              <View style={styles.dotsRow}>
-                {dotAnims.map((dotAnim, i) => (
-                  <Animated.View
-                    key={i}
-                    style={[
-                      styles.thinkingDot,
-                      {
-                        opacity: dotAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.25, 1],
-                        }),
-                        transform: [{
-                          scale: dotAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0.8, 1.2],
-                          }),
-                        }],
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
+          <View style={styles.agenticCenterContent}>
+            <View style={styles.thoughtLineStationaryAnchor}>
+              <ThoughtLine
+                label="Thinking..."
+                doneLabel="Thought for"
+                working={agentStepIndex < 5}
+                currentStepIndex={agentStepIndex}
+                steps={[
+                  'Analyzing training frequency',
+                  `Calibrating ${selectedDifficulty} intensity`,
+                  `Designing ${selectedFrequency}-day workout split`,
+                  'Selecting exercises & volume',
+                  'Finalizing personalized protocol',
+                ]}
+                collapsible={true}
+              />
             </View>
-
-            {/* Agentic Reasoning Live Timeline */}
-            <View style={styles.reasoningTimeline}>
-              {REASONING_STEPS.map((step, idx) => {
-                const isDone = agentStepIndex > idx;
-                const isCurrent = agentStepIndex === idx;
-                const isPending = agentStepIndex < idx;
-
-                return (
-                  <View key={idx} style={styles.reasoningStepRow}>
-                    <View style={styles.reasoningIconColumn}>
-                      {isDone ? (
-                        <View style={styles.checkSquircle}>
-                          <Check size={13} color="#FFFFFF" strokeWidth={3} />
-                        </View>
-                      ) : isCurrent ? (
-                        <View style={styles.spinnerSquircle}>
-                          <ActivityIndicator size="small" color={colors.text} />
-                        </View>
-                      ) : (
-                        <View style={styles.pendingDot} />
-                      )}
-                      {idx < REASONING_STEPS.length - 1 && (
-                        <View
-                          style={[
-                            styles.stepConnector,
-                            isDone && styles.stepConnectorDone,
-                          ]}
-                        />
-                      )}
-                    </View>
-
-                    <View
-                      style={[
-                        styles.reasoningTextWrap,
-                        isPending && { opacity: 0.3 },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.reasoningStepTitle,
-                          isCurrent && styles.reasoningStepTitleActive,
-                        ]}
-                      >
-                        {step.title}
-                      </Text>
-                      <Text style={styles.reasoningStepDesc}>{step.desc}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
+          </View>
         </Animated.View>
       )}
 
@@ -1336,15 +1472,42 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
       {/* ======================================================== */}
       {currentStep === 4 && generatedSplit && (
         <View style={styles.screenWrapper}>
+          {/* Top iOS Navigation Bar */}
+          <View style={styles.step4NavBar}>
+            <TouchableOpacity
+              onPress={() => setCurrentStep(2)}
+              style={styles.step4NavButton}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Back to setup"
+            >
+              <ChevronLeft size={22} color="#007AFF" strokeWidth={2.4} />
+            </TouchableOpacity>
+
+            <Text style={styles.step4NavTitle}>AI Generated Split</Text>
+
+            <TouchableOpacity
+              onPress={handleRegenerate}
+              style={styles.step4NavButton}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Regenerate routine"
+            >
+              <RotateCcw size={20} color="#007AFF" strokeWidth={2.2} />
+            </TouchableOpacity>
+          </View>
+
           <ScrollView
             contentContainerStyle={styles.resultScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* Split Overview Hero Card */}
+            {/* Split Overview Card (Apple Fitness Material) */}
             <View style={styles.routineHeroCard}>
               <View style={styles.heroAiBadgeRow}>
                 <View style={styles.heroAiBadge}>
-                  <Sparkles size={13} color="#FFFFFF" />
+                  <Sparkles size={12} color="#007AFF" />
                   <Text style={styles.heroAiBadgeText}>AI GENERATED SPLIT</Text>
                 </View>
                 <View style={styles.frequencyTag}>
@@ -1356,24 +1519,24 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
 
               <Text style={styles.routineHeroTitle}>{generatedSplit.splitName}</Text>
 
-              {/* Summary metrics */}
+              {/* Summary metrics strip */}
               <View style={styles.heroMetricsStrip}>
                 <View style={styles.heroMetricItem}>
-                  <Calendar size={14} color={colors.text} />
+                  <Calendar size={13} color="rgba(255, 255, 255, 0.7)" />
                   <Text style={styles.heroMetricValue}>
                     {generatedSplit.days.length} Days
                   </Text>
                 </View>
                 <View style={styles.heroMetricDivider} />
                 <View style={styles.heroMetricItem}>
-                  <Zap size={14} color={colors.text} />
+                  <Zap size={13} color="rgba(255, 255, 255, 0.7)" />
                   <Text style={styles.heroMetricValue}>
                     {generatedSplit.difficulty.toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.heroMetricDivider} />
                 <View style={styles.heroMetricItem}>
-                  <Dumbbell size={14} color={colors.text} />
+                  <Dumbbell size={13} color="rgba(255, 255, 255, 0.7)" />
                   <Text style={styles.heroMetricValue}>
                     {generatedSplit.days.reduce((sum, d) => sum + d.exercises.length, 0)} Total
                   </Text>
@@ -1381,50 +1544,36 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
               </View>
             </View>
 
-            {/* AI Coach Rationale Card */}
-            <View style={styles.coachRationaleCard}>
-              <View style={styles.coachHeaderRow}>
-                <View style={styles.coachIconSquircle}>
-                  <Bot size={18} color={colors.text} />
-                </View>
-                <Text style={styles.coachHeaderTitle}>AI Coach Rationale</Text>
-              </View>
-              <Text style={styles.coachRationaleText}>
-                {generatedSplit.coachRationale}
-              </Text>
-            </View>
-
-            {/* Day Tabs */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.dayTabsScroll}
-              contentContainerStyle={styles.dayTabsContent}
-            >
-              {generatedSplit.days.map((day, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={[
-                    styles.dayTab,
-                    activeDayIndex === idx && styles.dayTabActive,
-                  ]}
-                  onPress={() => {
-                    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
-                    setActiveDayIndex(idx);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text
+            {/* Apple Inset Segmented Control for Days */}
+            <View style={styles.segmentedTrack}>
+              {generatedSplit.days.map((day, idx) => {
+                const isActive = activeDayIndex === idx;
+                return (
+                  <TouchableOpacity
+                    key={idx}
                     style={[
-                      styles.dayTabText,
-                      activeDayIndex === idx && styles.dayTabTextActive,
+                      styles.segmentTab,
+                      isActive && styles.segmentTabActive,
                     ]}
+                    onPress={() => {
+                      try { Haptics.selectionAsync(); } catch {}
+                      setActiveDayIndex(idx);
+                    }}
+                    activeOpacity={0.8}
                   >
-                    {day.dayLabel}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                    <Text
+                      style={[
+                        styles.segmentTabText,
+                        isActive && styles.segmentTabTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {day.dayLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             {/* Active Day Detail */}
             {(() => {
@@ -1434,71 +1583,79 @@ export const AiWorkoutGenerateScreen: React.FC = () => {
                 <View style={styles.dayDetailWrap}>
                   <View style={styles.dayDetailHeader}>
                     <Text style={styles.dayDetailTitle}>{activeDay.title}</Text>
+                    <Text style={styles.dayDetailSubtitle}>
+                      {activeDay.exercises.length} Exercises
+                    </Text>
                   </View>
 
                   <View style={styles.exercisesListStack}>
                     {activeDay.exercises.map((ex, index) => (
-                      <View key={ex.id} style={styles.exerciseItemCard}>
+                      <TouchableOpacity
+                        key={ex.id || `ex-${index}`}
+                        style={styles.exerciseItemCard}
+                        onPress={() => {
+                          try { Haptics.selectionAsync(); } catch {}
+                          navigation.navigate('WorkoutDetail', {
+                            workoutId: ex.id,
+                            exercise: ex,
+                          });
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${ex.title}, ${ex.category}`}
+                      >
+                        {/* Step Index Badge */}
                         <View style={styles.exerciseStepBadge}>
                           <Text style={styles.exerciseStepText}>{index + 1}</Text>
                         </View>
 
+                        {/* Static Illustration Squircle */}
                         <View style={styles.exerciseIllustrationWrap}>
-                          <WorkoutIllustration slug={ex.slug} size={50} />
+                          <WorkoutIllustration
+                            slug={ex.slug}
+                            size={50}
+                            autoPlay={false}
+                            interactive={false}
+                            backgroundColor="#FFFFFF"
+                          />
                         </View>
 
+                        {/* Exercise Details Column */}
                         <View style={styles.exerciseDetails}>
                           <Text style={styles.exerciseTitleText} numberOfLines={1}>
                             {ex.title}
                           </Text>
-                          <Text style={styles.exerciseEquipmentText}>
-                            {ex.equipment} • {ex.category}
+                          <Text style={styles.exerciseCategorySubtext}>
+                            {ex.category?.toUpperCase() || 'STRENGTH'}
                           </Text>
-
-                          <View style={styles.exerciseSpecPillsRow}>
-                            <View style={styles.specPill}>
-                              <Dumbbell size={11} color={colors.text} />
-                              <Text style={styles.specPillText}>
-                                {ex.preferredSets} Sets × {ex.preferredReps}
-                              </Text>
-                            </View>
-                            {ex.restTimeSeconds > 0 && (
-                              <View style={[styles.specPill, { marginLeft: 6 }]}>
-                                <Clock size={11} color={colors.text} />
-                                <Text style={styles.specPillText}>
-                                  {ex.restTimeSeconds}s rest
-                                </Text>
-                              </View>
-                            )}
-                          </View>
                         </View>
-                      </View>
+
+                        {/* Disclosure Chevron */}
+                        <ChevronRight
+                          size={14}
+                          color="rgba(255, 255, 255, 0.3)"
+                          strokeWidth={2.5}
+                        />
+                      </TouchableOpacity>
                     ))}
                   </View>
                 </View>
               );
             })()}
+
+            <View style={{ height: 90 }} />
           </ScrollView>
 
-          {/* Bottom Action Bar */}
-          <View style={styles.resultBottomBar}>
+          {/* Apple Bottom Dock: Only Save All Days Primary Button */}
+          <View style={styles.appleBottomDock}>
             <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={handleStartDayWorkout}
-              activeOpacity={0.88}
-            >
-              <Dumbbell size={18} color={colors.textInverse} style={{ marginRight: 8 }} />
-              <Text style={styles.primaryBtnText}>
-                Start {generatedSplit.days[activeDayIndex]?.dayLabel || 'Workout'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondarySaveBtn}
+              style={styles.applePrimarySaveBtn}
               onPress={handleSaveAllDays}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Save all days to my workouts"
             >
-              <Text style={styles.secondarySaveBtnText}>
+              <Text style={styles.applePrimarySaveBtnText}>
                 Save All {generatedSplit.days.length} Days to My Workouts
               </Text>
             </TouchableOpacity>
@@ -1518,52 +1675,38 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  topSection: {
-    backgroundColor: colors.background,
+  /* Setup Header (Steps 1 & 2) matching ProfileSetupScreen */
+  setupHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 8,
+    backgroundColor: '#0A0A0A',
   },
-  topBar: {
+  setupNavBar: {
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: 'flex-start',
+    marginBottom: 8,
   },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
+  setupBackButton: {
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    backgroundColor: colors.surfaceElevated,
-  },
-  aiPillHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-  },
-  aiPillHeaderText: {
-    fontSize: 11,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    letterSpacing: 0.5,
-  },
-  stepCounterText: {
-    fontSize: 12,
-    fontFamily: typography.fonts.headingSemiBold,
-    color: colors.textMuted,
+    alignItems: 'flex-start',
+    marginLeft: -4,
   },
   progressTrack: {
-    width: '100%',
     height: 3,
-    backgroundColor: colors.borderSubtle,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 1.5,
+    overflow: 'hidden',
+    width: '100%',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: colors.primary,
+    backgroundColor: '#007AFF',
+    borderRadius: 1.5,
   },
 
   resultHeader: {
@@ -1575,10 +1718,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  resultBackButton: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    marginLeft: -4,
+  },
   resultHeaderTitle: {
     fontSize: 16,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   regenerateHeaderBtn: {
     width: 38,
@@ -1586,149 +1737,203 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
   },
 
-  scrollBody: {
-    padding: 20,
-    paddingBottom: 40,
+  /* Scroll Content & Layout */
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
   },
-  headingBlock: {
-    marginBottom: 24,
+  stepWrapper: {
+    flex: 1,
   },
-  badgeRow: {
-    flexDirection: 'row',
+  centeredTitleGroup: {
     alignItems: 'center',
-    marginBottom: 8,
-    gap: 6,
+    marginTop: 16,
+    marginBottom: 28,
   },
-  badgeRowText: {
-    fontSize: 11,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textSecondary,
-    letterSpacing: 0.6,
+  centeredStepTitle: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: -0.6,
+    lineHeight: 38,
   },
-  headingTitle: {
-    fontSize: 26,
-    fontFamily: typography.fonts.headingBlack,
-    color: colors.text,
-    letterSpacing: -0.5,
-    marginBottom: 8,
-  },
-  headingSubtitle: {
+  stepSubtitleText: {
+    fontFamily: APPLE_FONT_FAMILY,
     fontSize: 14,
-    fontFamily: typography.fonts.headingRegular,
-    color: colors.textSecondary,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    marginTop: 8,
     lineHeight: 20,
+    paddingHorizontal: 16,
   },
-
-  optionsStack: {
+  optionsList: {
     gap: 12,
   },
+
+  /* Apple Inset Grouped Selection Card matching ProfileSetupScreen */
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(28, 28, 30, 0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
+    ...(Platform.OS === 'web'
+      ? {
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+        } as any
+      : {}),
   },
-  optionCardActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.surfaceElevated,
+  optionCardSelected: {
+    borderColor: '#007AFF',
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
+  },
+  optionIconBox: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  optionContent: {
+    flex: 1,
   },
   optionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 4,
   },
-  optionTitleText: {
-    fontSize: 16,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    marginRight: 8,
+  optionTitle: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
   },
-  optionTitleTextActive: {
-    color: colors.text,
+  optionTitleSelected: {
+    color: '#FFFFFF',
   },
-  badgePill: {
-    backgroundColor: colors.surfaceElevated,
+  optionSubtitle: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.6)',
+    lineHeight: 18,
+  },
+  tagBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
-  badgePillActive: {
-    backgroundColor: colors.surfaceHighlight,
+  tagBadgeSelected: {
+    backgroundColor: 'rgba(0, 122, 255, 0.2)',
   },
-  badgePillText: {
-    fontSize: 10,
-    fontFamily: typography.fonts.headingSemiBold,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
+  tagBadgeText: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontWeight: '600',
   },
-  badgePillTextActive: {
-    color: colors.text,
+  tagBadgeTextSelected: {
+    color: '#007AFF',
+    fontWeight: '700',
   },
-  optionDescText: {
-    fontSize: 12,
-    fontFamily: typography.fonts.headingRegular,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    paddingRight: 8,
+  checkCircleWrapper: {
+    marginLeft: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  radioOuter: {
+  unselectedRing: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.borderHighlight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 12,
-  },
-  radioOuterActive: {
-    borderColor: colors.primary,
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
 
-  bottomBar: {
-    padding: 16,
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  /* Bottom Action Footer matching ProfileSetupScreen */
+  footer: {
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 20,
+    paddingTop: 12,
+    backgroundColor: '#0A0A0A',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  primaryButton: {
+    height: 52,
+    backgroundColor: '#007AFF',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryButtonText: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
   },
   primaryBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#007AFF',
     minHeight: 52,
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
+    shadowColor: '#007AFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 3,
-  },
-  generateBtn: {
-    backgroundColor: colors.primary,
+    elevation: 4,
   },
   primaryBtnText: {
-    fontSize: 15,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textInverse,
+    fontSize: 16,
+    fontFamily: APPLE_FONT_FAMILY,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    letterSpacing: -0.3,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* Agentic Loading Screen */
   agenticLoadingFull: {
     flex: 1,
     backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  agenticCenterContent: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  thoughtLineStationaryAnchor: {
+    minHeight: 180,
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    alignSelf: 'center',
   },
   agenticScrollContent: {
     flexGrow: 1,
@@ -1877,70 +2082,106 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  /* Step 4: Result View */
+  /* Top iOS Navigation Bar for Step 4 */
+  step4NavBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    height: 48,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  step4NavButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  step4NavTitle: {
+    fontFamily: APPLE_FONT_FAMILY,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+
+  /* Step 4: Result View (Apple Fitness Material) */
   resultScrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 20,
   },
   routineHeroCard: {
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 20,
-    padding: 20,
+    padding: 18,
     marginBottom: 16,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
     elevation: 2,
+    ...(Platform.OS === 'web'
+      ? {
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+        } as any
+      : {}),
   },
   heroAiBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   heroAiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceHighlight,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    gap: 6,
+    backgroundColor: 'rgba(0, 122, 255, 0.15)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 7,
+    gap: 5,
   },
   heroAiBadgeText: {
-    fontSize: 10,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
+    fontSize: 10.5,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '700',
+    color: '#007AFF',
     letterSpacing: 0.5,
   },
   frequencyTag: {
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 7,
   },
   frequencyTagText: {
-    fontSize: 10,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textSecondary,
+    fontSize: 10.5,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.65)',
+    letterSpacing: 0.3,
   },
   routineHeroTitle: {
-    fontSize: 22,
-    fontFamily: typography.fonts.headingBlack,
-    color: colors.text,
+    fontSize: 24,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '700',
+    color: '#FFFFFF',
     letterSpacing: -0.4,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   heroMetricsStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   heroMetricItem: {
     flex: 1,
@@ -1951,79 +2192,48 @@ const styles = StyleSheet.create({
   },
   heroMetricValue: {
     fontSize: 12,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   heroMetricDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: colors.border,
+    width: StyleSheet.hairlineWidth,
+    height: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
 
-  coachRationaleCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 20,
-  },
-  coachHeaderRow: {
+  /* Apple Inset Segmented Control for Days */
+  segmentedTrack: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 18,
   },
-  coachIconSquircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceElevated,
+  segmentTab: {
+    flex: 1,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 9,
   },
-  coachHeaderTitle: {
+  segmentTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentTabText: {
     fontSize: 13,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.65)',
   },
-  coachRationaleText: {
-    fontSize: 12,
-    fontFamily: typography.fonts.headingRegular,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-
-  /* Day Tabs */
-  dayTabsScroll: {
-    marginBottom: 16,
-    maxHeight: 44,
-  },
-  dayTabsContent: {
-    gap: 8,
-    paddingRight: 8,
-  },
-  dayTab: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  dayTabActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  dayTabText: {
-    fontSize: 12,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.textSecondary,
-  },
-  dayTabTextActive: {
-    color: colors.textInverse,
+  segmentTabTextActive: {
+    color: '#000000',
+    fontWeight: '700',
   },
 
   /* Day Detail */
@@ -2031,59 +2241,54 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   dayDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
   dayDetailTitle: {
-    fontSize: 17,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    marginBottom: 8,
+    fontSize: 18,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+    flex: 1,
+    marginRight: 8,
   },
-  dayDetailMetrics: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  dayMetricPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    gap: 5,
-  },
-  dayMetricText: {
-    fontSize: 11,
-    fontFamily: typography.fonts.headingSemiBold,
-    color: colors.text,
+  dayDetailSubtitle: {
+    fontSize: 12.5,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.45)',
   },
 
   exercisesListStack: {
-    gap: 10,
+    gap: 8,
   },
   exerciseItemCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 16,
-    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   exerciseStepBadge: {
     width: 22,
     height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.surfaceElevated,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   exerciseStepText: {
     fontSize: 11,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   exerciseIllustrationWrap: {
     width: 50,
@@ -2097,55 +2302,60 @@ const styles = StyleSheet.create({
   },
   exerciseDetails: {
     flex: 1,
+    justifyContent: 'center',
   },
   exerciseTitleText: {
-    fontSize: 14,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
-    marginBottom: 2,
+    fontSize: 15.5,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+    marginBottom: 3,
   },
-  exerciseEquipmentText: {
-    fontSize: 11,
-    fontFamily: typography.fonts.headingRegular,
-    color: colors.textSecondary,
-    marginBottom: 6,
-  },
-  exerciseSpecPillsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  specPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 4,
-  },
-  specPillText: {
-    fontSize: 10,
-    fontFamily: typography.fonts.headingBold,
-    color: colors.text,
+  exerciseCategorySubtext: {
+    fontSize: 11.5,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.45)',
+    letterSpacing: 0.4,
   },
 
-  resultBottomBar: {
-    padding: 16,
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 8,
+  /* Apple Bottom Action Dock */
+  appleBottomDock: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.88)',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    ...(Platform.OS === 'web'
+      ? {
+          backdropFilter: 'blur(25px)',
+          WebkitBackdropFilter: 'blur(25px)',
+        } as any
+      : {}),
   },
-  secondarySaveBtn: {
-    minHeight: 46,
-    borderRadius: 12,
+  applePrimarySaveBtn: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceElevated,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  secondarySaveBtnText: {
-    fontSize: 14,
-    fontFamily: typography.fonts.headingSemiBold,
-    color: colors.text,
+  applePrimarySaveBtnText: {
+    fontSize: 16,
+    fontFamily: APPLE_FONT_FAMILY,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
 });
